@@ -1,0 +1,10 @@
+@PREFIX@/include/sensor/sensor.h
+@PREFIX@/include/sensor/sensor_accel.h
+@PREFIX@/include/sensor/sensor_geomag.h
+@PREFIX@/include/sensor/sensor_proxi.h
+@PREFIX@/include/sensor/sensor_motion.h
+@PREFIX@/include/sensor/sensor_light.h
+@PREFIX@/include/sensor/sensor_gyro.h
+@PREFIX@/lib/pkgconfig/*.pc
+
+

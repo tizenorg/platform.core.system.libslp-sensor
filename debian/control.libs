@@ -1,0 +1,18 @@
+Source: <yoursource>
+Section: unknown
+Priority: extra
+Maintainer: unknown <unknown@samsung.com>
+Build-Depends: debhelper (>= 5), autotools-dev
+Standards-Version: 0.1.0
+
+Package: <yourpkg>-dev
+Section: libs
+Architecture: any
+Depends: <yourpkg> (= ${Source-Version})
+Description: <Fill description>
+
+Package: <yourpkg>
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: <Fill description>

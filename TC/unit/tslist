@@ -1,0 +1,11 @@
+/unit/utc_SensorFW_sf_is_sensor_event_available_func
+/unit/utc_SensorFW_sf_get_properties_func
+/unit/utc_SensorFW_sf_connect_func
+/unit/utc_SensorFW_sf_disconnect_func
+/unit/utc_SensorFW_sf_start_func
+/unit/utc_SensorFW_sf_stop_func
+/unit/utc_SensorFW_sf_register_event_func
+/unit/utc_SensorFW_sf_unregister_event_func
+/unit/utc_SensorFW_sf_get_data_func
+/unit/utc_SensorFW_sf_check_rotation_func
+/unit/utc_SensorFW_sf_read_raw_data_func
