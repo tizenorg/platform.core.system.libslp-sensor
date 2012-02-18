@@ -77,6 +77,15 @@ enum accelerometer_rotate_state {
 	ROTATION_EVENT_270			= 4,	/*CCW base*/
 };
 
+enum accelerometer_property_id {
+	ACCELEROMETER_PROPERTY_UNKNOWN = 0,
+	ACCELEROMETER_PROPERTY_SET_CALIBRATION,
+	ACCELEROMETER_PROPERTY_CHECK_CALIBRATION_STATUS,
+	ACCELEROMETER_PROPERTY_SET_WAKEUP,
+	ACCELEROMETER_PROPERTY_CHECK_WAKEUP_STATUS,
+};
+
+
 
 struct rotation_event {
 	enum accelerometer_rotate_state rotation;

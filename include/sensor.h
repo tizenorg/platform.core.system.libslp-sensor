@@ -79,6 +79,9 @@ typedef enum {
 #include <sensor_motion.h>
 #include <sensor_gyro.h>
 
+#define MAX_KEY_LEN 30
+#define MAX_VALUE_SIZE 12
+
 typedef enum {
 	CONDITION_NO_OP,
 	CONDITION_EQUAL,
@@ -126,7 +129,7 @@ typedef struct {
 	int data_unit_idx;
 	unsigned long long time_stamp;
 	int values_num;
-	float values[12];
+	float values[MAX_VALUE_SIZE];
 } sensor_data_t;
 
 typedef struct {
@@ -140,7 +143,16 @@ typedef struct {
 	float sensor_min_range;
 	float sensor_max_range;
 	float sensor_resolution;
+	char sensor_name[MAX_KEY_LEN];
+	char sensor_vendor[MAX_KEY_LEN];
 } sensor_properties_t;
+
+typedef struct {
+	int sensor_unit_idx;
+	float sensor_min_range;
+	float sensor_max_range;
+	float sensor_resolution;
+} sensor_data_properties_t;
 
 
 /**
@@ -152,6 +164,14 @@ typedef struct {
  */
 int sf_is_sensor_event_available ( sensor_type_t desired_sensor_type , unsigned int desired_event_type );
 
+/**
+ * @fn int sf_get_data_properties(unsigned data_id, sensor_dada_properties_t *return_data_properties)
+ * @brief This API loads the properties of data ID like unit of sensor data, max/min range of sensor data etc to the output parameter sensor_data_properties.
+ * @param[in] data_id your desired data ID
+ * @param[out] return_data_properties property information of your desired data ID
+ * @return if it succeed, it return zero value , otherwise negative value return
+ */
+int sf_get_data_properties(unsigned int data_id, sensor_data_properties_t *return_data_properties);
 
 /**
  * @fn int sf_get_properties(sensor_type_t sensor_type, sensor_properties_t *return_properties)
@@ -161,6 +181,15 @@ int sf_is_sensor_event_available ( sensor_type_t desired_sensor_type , unsigned 
  * @return if it succeed, it return zero value , otherwise negative value return
  */
 int sf_get_properties(sensor_type_t sensor_type, sensor_properties_t *return_properties);
+
+
+/**
+ * @fn int sf_set_property(sensor_type_t sensor_type, unsigned int property_id, long value)
+ * @brief This API set the property of sensor type like calibration, enable wakeup event, etc
+ * @param[in] sensor_type your desired sensor type, property_id your desired property ID, value for property input
+ * @return if it succeed, it return zero value , otherwise negative value return
+ */
+int sf_set_property(sensor_type_t sensor_type, unsigned int property_id, long value);
 
 
 /**

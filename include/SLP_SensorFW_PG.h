@@ -261,13 +261,6 @@ Once the application is connected to a sensor, data processing can be done using
 
 <h2 class="pg">Processing data without connecting to a sensor</h2>
 
-<b>API : sf_read_raw_data</b><br>
-<b>Parameter In</b>: sensor_type_t sensor_type<br>
-<b>Parameter Out</b>: float values[] , size_t *values_size<br>
-<b>Parameter Return</b>: int  <br>
-<b>Functionality</b>:   This API gets raw data from a sensor without connecting to the sensor-server. This doesn't need a connection handle. The type of sensor is supplied and return data is stored in the output parameter values [].<br>
-
-
 
 <b>API : sf_check_rotation</b><br>
 <b>Parameter Out</b>:  unsigned long *state<br>
@@ -360,18 +353,6 @@ int main()
  		sensor_data->values[2], sensor_data->data_accuracy, sensor_data->data_unit_idx,
  		sensor_data->time_stamp);
 		
-
-	//Get the Raw Data(Bypass server)
-	ret_val = sf_read_raw_data(sensor_type,(float *)raw_data, &size);
-	if(ret_val != 0)
-	{
-		printf("\n Sensor Error : sensor_get_data FAILED with code %d",ret_val);
-		return -1;
-	}
-	
-	printf("\n Seneor test : My raw data is x= %f y= %f and z= %f \n",
-		raw_data[0], raw_data[1], raw_data[2]);
-	
 
 	//Get the rotation/orientation 
 	ret_val = sf_check_rotation(&rotaion_state); 
@@ -609,12 +590,6 @@ int main(int argc, char *argv[])
 		<td>sf_check_rotation</td>
 		<td>unsigned long *curr_state</td>
 		<td>This API gets the current rotation value such as ROTATION_LANDSCAPE_LEFT ,  ROTATION_PORTRAIT_TOP  etc</td>
-	</tr>
-	<tr>
-		<td>11</td>
-		<td>sf_read_raw_data</td>
-		<td>sensor_type_t sensor_type , float values[] , size_t *values_size</td>
-		<td>This API reads raw data without connecting the process with the sensor</td>
 	</tr>
 </table>
 

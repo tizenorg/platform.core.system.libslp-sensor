@@ -88,6 +88,10 @@ extern int errno;
 #define ROTATION_THD 45
 			   
 #define RADIAN_VALUE (57.2957)
+#define XY_POSITIVE_THD 2.0
+#define XY_NEGATIVE_THD -2.0
+
+#define ON_TIME_REQUEST_COUNTER 1
 
 
 
@@ -247,80 +251,94 @@ inline static void cb_release_handle(int i)
 	g_cb_table[i].source = NULL;
 	g_cb_table[i].gsource_interval = 0;
 	g_cb_table[i].gID = 0;
-	
+
 	_lock.unlock();
 }
 
-static void sensor_changed_cb (keynode_t *node, void *data)
+
+static void sensor_changed_cb(keynode_t *node, void *data)
 {
-	int *cb_handle = (int*)(data);
+	unsigned int event_type = (unsigned int)(data);
+	int i = 0;
 	int val;
 	sensor_event_data_t cb_data;
 	sensor_panning_data_t panning_data;
 
-	if (g_cb_table[*cb_handle].sensor_callback_func_t) {
-
-		if ( vconf_keynode_get_type(node) !=  VCONF_TYPE_INT ) {
-			ERR("Err invaild key_type , incomming key_type : %d , key_name : %s , key_value : %d", 
-				vconf_keynode_get_type(node), vconf_keynode_get_name(node),vconf_keynode_get_int(node));
-			return;
-		}
-		
-		val = vconf_keynode_get_int(node);
-
-		if(g_cb_table[*cb_handle].cb_event_type == MOTION_ENGINE_EVENT_PANNING)
-		{
-			if(val != 0)
-			{
-				panning_data.x = (short)(val >> 16);
-				panning_data.y = (short)(val & 0x0000FFFF);
-				cb_data.event_data_size = sizeof(sensor_panning_data_t);
-				cb_data.event_data = (void *)&panning_data;
-				g_cb_table[*cb_handle].sensor_callback_func_t(g_cb_table[*cb_handle].cb_event_type, &cb_data , g_cb_table[*cb_handle].client_data);
-			}
-		}
-		else if ( val<0 ) {
-			ERR("vconf_keynode_get_int fail for key : %s , handle_num : %d , get_value : %d\n",	g_cb_table[*cb_handle].call_back_key,*cb_handle , val);			
-		} else {			
-			switch (g_cb_table[*cb_handle].cb_event_type) {
-				case ACCELEROMETER_EVENT_ROTATION_CHECK :	
-					/* fall through */ 
-				case ACCELEROMETER_EVENT_SET_HORIZON :
-					/* fall through */
-				case ACCELEROMETER_EVENT_SET_WAKEUP :
-					/* fall through */
-				case GEOMAGNETIC_EVENT_CALIBRATION_NEEDED :					
-					/* fall through */ 
-				case LIGHT_EVENT_CHANGE_LEVEL :
-					/* fall through */ 
-				case PROXIMITY_EVENT_CHANGE_STATE:
-					/* fall through */
-				case MOTION_ENGINE_EVENT_SNAP:
-					/* fall through */ 
-				case MOTION_ENGINE_EVENT_SHAKE:
-					/* fall through */ 
-				case MOTION_ENGINE_EVENT_DOUBLETAP:					
-					/* fall through */ 
-				case MOTION_ENGINE_EVENT_TOP_TO_BOTTOM:
-					/* fall through */
-					cb_data.event_data_size = sizeof(val);
-					cb_data.event_data = (void *)&val ;					
-					break;
-				default :
-					ERR("Undefined cb_event_type");
-					return ;			
-					break;
-			}
-			
-			
-			g_cb_table[*cb_handle].sensor_callback_func_t(g_cb_table[*cb_handle].cb_event_type , &cb_data , g_cb_table[*cb_handle].client_data);
-		}		
-
-	} else {
-		ERR("Empty Callback func in cb_handle : %d\n", *cb_handle);
+	if(!node)
+	{
+		ERR("Node is NULL");
+		return;
 	}
-	
+
+	if (vconf_keynode_get_type(node) !=  VCONF_TYPE_INT ) {
+		ERR("Err invaild key_type , incomming key_type : %d , key_name : %s , key_value : %d", vconf_keynode_get_type(node), vconf_keynode_get_name(node),vconf_keynode_get_int(node));
+		return;
+	}
+
+	val = vconf_keynode_get_int(node);
+
+	for( i = 0 ; i < MAX_CB_BIND_SLOT ; i++)
+	{
+		if(g_cb_table[i].cb_event_type == event_type)
+		{
+			if (g_cb_table[i].sensor_callback_func_t)
+			{
+				if(g_cb_table[i].cb_event_type == MOTION_ENGINE_EVENT_PANNING)
+				{
+					if(val != 0)
+					{
+						panning_data.x = (short)(val >> 16);
+						panning_data.y = (short)(val & 0x0000FFFF);
+						cb_data.event_data_size = sizeof(sensor_panning_data_t);
+						cb_data.event_data = (void *)&panning_data;
+						g_cb_table[i].sensor_callback_func_t(g_cb_table[i].cb_event_type, &cb_data, g_cb_table[i].client_data);
+					}
+				} else {
+					if ( val<0 ) 
+					{
+						ERR("vconf_keynode_get_int fail for key : %s , handle_num : %d , get_value : %d\n",	g_cb_table[i].call_back_key,i , val);
+						return ;
+					}
+
+					switch (g_cb_table[i].cb_event_type) {
+						case ACCELEROMETER_EVENT_ROTATION_CHECK :
+							/* fall through */
+						case ACCELEROMETER_EVENT_SET_HORIZON :
+							/* fall through */
+						case ACCELEROMETER_EVENT_SET_WAKEUP :
+							/* fall through */
+						case GEOMAGNETIC_EVENT_CALIBRATION_NEEDED :
+							/* fall through */
+						case LIGHT_EVENT_CHANGE_LEVEL :
+							/* fall through */
+						case PROXIMITY_EVENT_CHANGE_STATE:
+							/* fall through */
+						case MOTION_ENGINE_EVENT_SNAP:
+							/* fall through */
+						case MOTION_ENGINE_EVENT_SHAKE:
+							/* fall through */
+						case MOTION_ENGINE_EVENT_DOUBLETAP:
+							/* fall through */
+						case MOTION_ENGINE_EVENT_TOP_TO_BOTTOM:
+							/* fall through */
+							cb_data.event_data_size = sizeof(val);
+							cb_data.event_data = (void *)&val;
+							break;
+						default :
+							ERR("Undefined cb_event_type");
+							return ;
+							break;
+					}
+					g_cb_table[i].sensor_callback_func_t(g_cb_table[i].cb_event_type ,	&cb_data , g_cb_table[i].client_data);
+				}
+			}
+			else {
+				 ERR("Empty Callback func in event : %d\n", event_type);
+			}
+		}
+	}
 }
+
 
 static gboolean sensor_timeout_handler(gpointer data)
 {
@@ -372,7 +390,7 @@ static gboolean sensor_timeout_handler(gpointer data)
 }
 
 ///////////////////////////////////for internal ///////////////////////////////////
-static int server_get_properties(int handle , sensor_properties_t *return_properties )
+static int server_get_properties(int handle , unsigned int data_id, void *property_data)
 {
 	cpacket packet(sizeof(cmd_return_property_t) + sizeof(base_property_struct)+ 4);
 	cmd_get_property_t *cmd_payload;
@@ -394,7 +412,11 @@ static int server_get_properties(int handle , sensor_properties_t *return_proper
 	packet.set_cmd(CMD_GET_PROPERTY);
 	packet.set_payload_size(sizeof(cmd_get_property_t));
 
-	cmd_payload->get_level = ((unsigned int)g_bind_table[handle].sensor_type<<16) | 0x0001;
+	if(data_id)
+		cmd_payload->get_level = data_id;
+	else
+		cmd_payload->get_level = ((unsigned int)g_bind_table[handle].sensor_type<<16) | 0x0001;
+
 
 
 	INFO("Send CMD_GET_PROPERTY command\n");
@@ -431,10 +453,28 @@ static int server_get_properties(int handle , sensor_properties_t *return_proper
 				base_property_struct *base_return_property;
 				base_return_property = (base_property_struct *)return_payload->property_struct;
 				
-				return_properties->sensor_unit_idx = base_return_property->sensor_unit_idx ;
-				return_properties->sensor_min_range= base_return_property->sensor_min_range;
-				return_properties->sensor_max_range= base_return_property->sensor_max_range;
-				return_properties->sensor_resolution = base_return_property->sensor_resolution;				
+				if(data_id)
+				{
+					sensor_data_properties_t *return_properties;
+					return_properties = (sensor_data_properties_t *)property_data;
+					return_properties->sensor_unit_idx = base_return_property->sensor_unit_idx ;
+					return_properties->sensor_min_range= base_return_property->sensor_min_range;
+					return_properties->sensor_max_range= base_return_property->sensor_max_range;
+					return_properties->sensor_resolution = base_return_property->sensor_resolution;				
+				}
+				else
+				{
+					sensor_properties_t *return_properties;
+					return_properties = (sensor_properties_t *)property_data;
+					return_properties->sensor_unit_idx = base_return_property->sensor_unit_idx ;
+					return_properties->sensor_min_range= base_return_property->sensor_min_range;
+					return_properties->sensor_max_range= base_return_property->sensor_max_range;
+					return_properties->sensor_resolution = base_return_property->sensor_resolution;				
+					memset(return_properties->sensor_name, '\0', sizeof(return_properties->sensor_name));
+					memset(return_properties->sensor_vendor, '\0', sizeof(return_properties->sensor_vendor));
+					strncpy(return_properties->sensor_name, base_return_property->sensor_name, strlen(base_return_property->sensor_name));
+					strncpy(return_properties->sensor_vendor, base_return_property->sensor_vendor, strlen(base_return_property->sensor_vendor));
+				}
 			}
 		} else {
 			ERR("unexpected server cmd\n");
@@ -447,6 +487,73 @@ static int server_get_properties(int handle , sensor_properties_t *return_proper
 }
 
 
+static int server_set_property(int handle , unsigned int property_id, long value )
+{
+	cpacket packet(sizeof(cmd_set_value_t) + 4);
+	cmd_set_value_t *cmd_payload;
+	INFO("server_set_property called with handle : %d \n", handle);
+	if (handle < 0) {
+		ERR("Invalid handle\n");
+		errno = EINVAL;
+		return -1;
+	}
+
+	cmd_payload = (cmd_set_value_t*)packet.data();
+	if (!cmd_payload) {
+		ERR("cannot find memory for send packet.data");
+		errno = ENOMEM;
+		return -2;
+	}	
+
+	packet.set_version(PROTOCOL_VERSION);
+	packet.set_cmd(CMD_SET_VALUE);
+	packet.set_payload_size(sizeof(cmd_set_value_t));
+
+	cmd_payload->sensor_type = g_bind_table[handle].sensor_type;
+	cmd_payload->property = property_id;
+	cmd_payload->value = value;
+
+
+	INFO("Send CMD_SET_VALUE command\n");
+	if (g_bind_table[handle].ipc && g_bind_table[handle].ipc->send(packet.packet(), packet.size()) == false) {
+		ERR("Faield to send a packet\n");		
+		release_handle(handle);
+		errno = ECOMM;
+		return -2;
+	}
+
+	if (g_bind_table[handle].ipc && g_bind_table[handle].ipc->recv(packet.packet(), packet.header_size()) == false) {
+		ERR("Faield to receive a packet\n");
+		release_handle(handle);
+		errno = ECOMM;
+		return -2;
+	}
+
+	if (packet.payload_size()) {
+		if (g_bind_table[handle].ipc && g_bind_table[handle].ipc->recv((char*)packet.packet() + packet.header_size(), packet.payload_size()) == false) {
+			ERR("Faield to receive a packet\n");
+			release_handle(handle);
+			errno = ECOMM;
+			return -2;
+		}
+
+		if (packet.cmd() == CMD_DONE) {
+			cmd_done_t *payload;
+			payload = (cmd_done_t*)packet.data();
+			if (payload->value == -1) {
+				ERR("cannot support input property\n");
+				errno = ENODEV;
+				return -1;
+			} 
+		} else {
+			ERR("unexpected server cmd\n");
+			errno = ECOMM;
+			return -2;
+		}
+	}
+
+	return 0;
+}
 
 ///////////////////////////////////for external ///////////////////////////////////
 
@@ -522,6 +629,28 @@ EXTAPI int sf_is_sensor_event_available ( sensor_type_t desired_sensor_type , un
 	return 0;
 }
 
+EXTAPI int sf_get_data_properties(unsigned int data_id, sensor_data_properties_t *return_data_properties)
+{
+	int handle;
+	int state = -1;
+		
+	retvm_if( (!return_data_properties )  , -1 , "Invalid return properties pointer : %p", return_data_properties);
+
+
+	handle = sf_connect((sensor_type_t)(data_id >> 16));
+	if ( handle < 0 ) {
+		ERR("Sensor connet fail !! for : %x \n", (data_id >> 16));
+		return -1;		
+	} else {
+		state = server_get_properties( handle , data_id, return_data_properties );
+		if ( state < 0 ) {
+			ERR("server_get_properties fail , state : %d \n",state);		
+		}
+		sf_disconnect(handle);		
+	}	
+
+	return state;
+}
 
 EXTAPI int sf_get_properties(sensor_type_t sensor_type, sensor_properties_t *return_properties)
 {
@@ -535,7 +664,7 @@ EXTAPI int sf_get_properties(sensor_type_t sensor_type, sensor_properties_t *ret
 		ERR("Sensor connet fail !! for : %x \n", sensor_type);
 		return -1;		
 	} else {
-		state = server_get_properties( handle , return_properties );
+		state = server_get_properties( handle , 0, return_properties );
 		if ( state < 0 ) {
 			ERR("server_get_properties fail , state : %d \n",state);		
 		}
@@ -544,6 +673,28 @@ EXTAPI int sf_get_properties(sensor_type_t sensor_type, sensor_properties_t *ret
 
 	return state;
 }
+
+
+EXTAPI int sf_set_property(sensor_type_t sensor_type, unsigned int property_id, long value)
+{
+	int handle;
+	int state = -1;
+		
+	handle = sf_connect(sensor_type);
+	if ( handle < 0 ) {
+		ERR("Sensor connet fail !! for : %x \n", sensor_type);
+		return -1;		
+	} else {
+		state = server_set_property( handle , property_id, value );
+		if ( state < 0 ) {
+			ERR("server_set_property fail , state : %d \n",state);		
+		}
+		sf_disconnect(handle);		
+	}	
+
+	return state;
+}
+
 
 EXTAPI int sf_connect(sensor_type_t sensor_type)
 {
@@ -574,55 +725,31 @@ EXTAPI int sf_connect(sensor_type_t sensor_type)
 		case ACCELEROMETER_SENSOR :
 			sf_channel_name = (char *)ACCEL_SENSOR_BASE_CHANNEL_NAME;						
 			g_bind_table[i].cb_event_max_num = 6;
-	
-			for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
-				g_bind_table[i].cb_slot_num[j] = -1;
-
 			break;
 			
 		case GEOMAGNETIC_SENSOR :
 			sf_channel_name = (char *)GEOMAG_SENSOR_BASE_CHANNEL_NAME;
 			g_bind_table[i].cb_event_max_num = 3;
-
-			for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
-				g_bind_table[i].cb_slot_num[j] = -1;
-
 			break;
 			
 		case LIGHT_SENSOR:
 			sf_channel_name = (char *)LIGHT_SENSOR_BASE_CHANNEL_NAME;
-			g_bind_table[i].cb_event_max_num = 2;
-
-			for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
-				g_bind_table[i].cb_slot_num[j] = -1;
-
+			g_bind_table[i].cb_event_max_num = 3;
 			break;
 			
 		case PROXIMITY_SENSOR:
 			sf_channel_name = (char *)PROXI_SENSOR_BASE_CHANNEL_NAME;
-			g_bind_table[i].cb_event_max_num = 2;
-
-			for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
-				g_bind_table[i].cb_slot_num[j] = -1;
-
+			g_bind_table[i].cb_event_max_num = 3;
 			break;
 
 		case MOTION_SENSOR:
 			sf_channel_name = (char *)MOTION_ENGINE_BASE_CHANNEL_NAME;
 			g_bind_table[i].cb_event_max_num = 7;
-
-			for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
-				g_bind_table[i].cb_slot_num[j] = -1;
-			
 			break;
 
 		case GYROSCOPE_SENSOR:
 			sf_channel_name = (char *)GYRO_SENSOR_BASE_CHANNEL_NAME;
 			g_bind_table[i].cb_event_max_num = 1;
-
-			for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
-				g_bind_table[i].cb_slot_num[j] = -1;
-
 			break;
 			
 		case THERMOMETER_SENSOR:		
@@ -639,6 +766,9 @@ EXTAPI int sf_connect(sensor_type_t sensor_type)
 	g_bind_table[i].sensor_type = sensor_type ;
 	g_bind_table[i].my_handle = i;
 	g_bind_table[i].sensor_state = SENSOR_STATE_STOPPED;
+
+	for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
+		g_bind_table[i].cb_slot_num[j] = -1;
 
 	try {
 		g_bind_table[i].ipc = new csock( (char *)STR_SF_CLIENT_IPC_SOCKET, csock::SOCK_TCP|csock::SOCK_IPC|csock::SOCK_WORKER, 0, 0);
@@ -987,86 +1117,27 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 
 	switch (event_type ) {
 			case ACCELEROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
-				/* fall through */ 
+				/* fall through */
 			case GEOMAGNETIC_EVENT_ATTITUDE_DATA_REPORT_ON_TIME:
-				/* fall through */ 			
+				/* fall through */
 			case PROXIMITY_EVENT_STATE_REPORT_ON_TIME:
 				/* fall through */
 			case GYROSCOPE_EVENT_RAW_DATA_REPORT_ON_TIME:
-				collect_data_flag = 1;
-				g_cb_table[i].request_count = 1;	//support only 1
-				g_cb_table[i].request_data_id = (event_type & (0xFFFF<<16)) |0x0001;
-				if (!event_condition) {
-					g_cb_table[i].gsource_interval = BASE_GATHERING_INTERVAL;
-				} else {
-					if ( (event_condition->cond_op == CONDITION_EQUAL) && (event_condition->cond_value1 > 0 ) ) {
-						g_cb_table[i].gsource_interval = (guint)event_condition->cond_value1;
-					} else {
-						ERR("Invaild input_condition interval , input_interval : %f\n", event_condition->cond_value1);
-						cb_release_handle(i);						
-						errno = EINVAL;
-						return -1;
-					}
-				}
-				
-				break;
-
+				/* fall through */
 			case LIGHT_EVENT_LEVEL_DATA_REPORT_ON_TIME:
 				collect_data_flag = 1;
-				g_cb_table[i].request_count = 1;	//support only 1
-				g_cb_table[i].request_data_id = LIGHT_BASE_DATA_SET;
-				if (!event_condition) {
-					g_cb_table[i].gsource_interval = (BASE_GATHERING_INTERVAL*5);
-				} else {
-					if ( (event_condition->cond_op == CONDITION_EQUAL) && (event_condition->cond_value1 > 0 ) ) {
-						g_cb_table[i].gsource_interval = (guint)event_condition->cond_value1;
-					} else {
-						ERR("Invaild input_condition interval , input_interval : %f\n", event_condition->cond_value1);
-						cb_release_handle(i);						
-						errno = EINVAL;
-						return -1;
-					}
-				}
+				g_cb_table[i].request_data_id = (event_type & (0xFFFF<<16)) |0x0001;
 				break;
-
+			case LIGHT_EVENT_LUX_DATA_REPORT_ON_TIME:
+				/* fall through */
 			case GEOMAGNETIC_EVENT_RAW_DATA_REPORT_ON_TIME:
-				collect_data_flag = 1;
-				g_cb_table[i].request_count = 1;	//support only 1
-				g_cb_table[i].request_data_id = GEOMAGNETIC_RAW_DATA_SET;
-				if (!event_condition) {
-					g_cb_table[i].gsource_interval = (BASE_GATHERING_INTERVAL);
-				} else {
-					if ( (event_condition->cond_op == CONDITION_EQUAL) && (event_condition->cond_value1 > 0 ) ) {
-						g_cb_table[i].gsource_interval = (guint)event_condition->cond_value1;
-					} else {
-						ERR("Invaild input_condition interval , input_interval : %f\n", event_condition->cond_value1);
-						cb_release_handle(i);						
-						errno = EINVAL;
-						return -1;
-					}
-				}
-				break;
-
+				/* fall through */
 			case ACCELEROMETER_EVENT_ORIENTATION_DATA_REPORT_ON_TIME:
+				/* fall through */
+			case PROXIMITY_EVENT_DISTANCE_DATA_REPORT_ON_TIME:
 				collect_data_flag = 1;
-				g_cb_table[i].request_count = 1;	//support only 1
-				g_cb_table[i].request_data_id = ACCELEROMETER_ORIENTATION_DATA_SET;
-				if (!event_condition) {
-					g_cb_table[i].gsource_interval = BASE_GATHERING_INTERVAL;
-				} else {
-					if ( (event_condition->cond_op == CONDITION_EQUAL) && (event_condition->cond_value1 > 0 ) ) {
-						g_cb_table[i].gsource_interval = (guint)event_condition->cond_value1;
-					} else {
-						ERR("Invaild input_condition interval , input_interval : %f\n", event_condition->cond_value1);
-						cb_release_handle(i);						
-						errno = EINVAL;
-						return -1;
-					}
-				}
-				
+				g_cb_table[i].request_data_id = (event_type & (0xFFFF<<16)) |0x0002;
 				break;
-
-				
 	}
 
 	INFO("key : %s(p:%p), cb_handle value : %d\n", g_cb_table[i].call_back_key ,g_cb_table[i].call_back_key, i );
@@ -1074,7 +1145,7 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 	if ( collect_data_flag ) {			
 		sensor_data_t *collected_data_set;		
 		
-		collected_data_set = new sensor_data_t [g_cb_table[i].request_count];
+		collected_data_set = new sensor_data_t [ON_TIME_REQUEST_COUNTER];
 		if ( !collected_data_set ) {
 			ERR("memory allocation fail for gathering datas\n");
 			cb_release_handle(i);
@@ -1083,6 +1154,20 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 		}
 		g_cb_table[i].collected_data = (void *)collected_data_set;
 		g_cb_table[i].current_collected_idx = 0;
+		
+		if (!event_condition) {
+			g_cb_table[i].gsource_interval = BASE_GATHERING_INTERVAL;
+		} else {
+			if ( (event_condition->cond_op == CONDITION_EQUAL) && (event_condition->cond_value1 > 0 ) ) {
+				g_cb_table[i].gsource_interval = (guint)event_condition->cond_value1;
+			} else {
+				ERR("Invaild input_condition interval , input_interval : %f\n", event_condition->cond_value1);
+				cb_release_handle(i);						
+				errno = EINVAL;
+				return -1;
+			}
+		}
+
 
 		if ( g_cb_table[i].gsource_interval != 0 ) {
 			g_cb_table[i].source = g_timeout_source_new(g_cb_table[i].gsource_interval);
@@ -1100,16 +1185,12 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 		g_cb_table[i].request_data_id = 0;
 		g_cb_table[i].collected_data = NULL;
 			
-		if (vconf_notify_key_changed( g_cb_table[i].call_back_key,
-			sensor_changed_cb, (void *)&g_cb_table[i].my_cb_handle) < 0 ) {
-			ERR("vconf_add_changed_cb fail, for key : %s  , my_cb_handle value : %d\n", g_cb_table[i].call_back_key, g_cb_table[i].my_cb_handle);
-			cb_release_handle(i);
-			errno = ENODEV;
-			return -2;
-		}	
-		
+		if (vconf_notify_key_changed( g_cb_table[i].call_back_key,sensor_changed_cb,(void*)(g_cb_table[i].cb_event_type)) < 0 ) {
+			DBG("vconf_add_changed_cb is already registered for key : %s  , my_cb_handle value : %d\n", g_cb_table[i].call_back_key, g_cb_table[i].my_cb_handle);
+		} else {
+			DBG("vconf_add_chaged_cb success for key : %s  , my_cb_handle value : %d\n", g_cb_table[i].call_back_key, g_cb_table[i].my_cb_handle);
+		}
 	}
-
 	g_bind_table[handle].cb_slot_num[avail_cb_slot_idx] = i;
 	
 	return 0;
@@ -1174,6 +1255,10 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 		case LIGHT_EVENT_LEVEL_DATA_REPORT_ON_TIME:
 			/* fall through */
 		case GEOMAGNETIC_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case LIGHT_EVENT_LUX_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case PROXIMITY_EVENT_DISTANCE_DATA_REPORT_ON_TIME:
 			collect_data_flag = 1;				
 			break;
 	}
@@ -1223,8 +1308,6 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 	g_bind_table[handle].cb_slot_num[i] = -1;
 
 	return state;
-
-
 }
 
 
@@ -1325,8 +1408,8 @@ EXTAPI int sf_check_rotation( unsigned long *curr_state)
 	int state = -1;
 
 	double raw_z;
-	double atan_value, norm_z;
-	int acc_theta , acc_pitch;	
+	double atan_value = 0, norm_z = 0;
+	int acc_theta = 0 , acc_pitch = 0;	
 	int handle = 0;
 	int lcd_type = 0;
 
@@ -1376,22 +1459,23 @@ EXTAPI int sf_check_rotation( unsigned long *curr_state)
 	if(vconf_get_int(LCD_TYPE_KEY, &lcd_type) != 0)
 		lcd_type = 0;
 
-	atan_value = atan2(base_data_values->values[1],base_data_values->values[0]);
-	
-	acc_theta = (int)(atan_value * (RADIAN_VALUE) + 270)%360;
+	if((base_data_values->values[0] > XY_POSITIVE_THD || base_data_values->values[0] < XY_NEGATIVE_THD) || (base_data_values->values[1] > XY_POSITIVE_THD || base_data_values->values[1] < XY_NEGATIVE_THD))
+	{
+		atan_value = atan2(base_data_values->values[1],base_data_values->values[0]);
+		acc_theta = ((int)(atan_value * (RADIAN_VALUE) + 270.0))%360;
+		raw_z = (double)(base_data_values->values[2]) / 9.8;
 
-	raw_z = (double)(base_data_values->values[2]/(0.004 * 9.81));
-
-	if ( raw_z > 250 ) {
-		norm_z = 1.0;
-	} 
-	else if ( raw_z < -250 ) {
-		norm_z = -1.0;
+		if ( raw_z > 1.0 ) {
+			norm_z = 1.0;
+		} 
+		else if ( raw_z < -1.0 ) {
+			norm_z = -1.0;
+		}
+		else {
+			norm_z = raw_z;
+		}
+		acc_pitch = (int)( acos(norm_z) *(RADIAN_VALUE));
 	}
-	else {
-		norm_z = ((double)raw_z)/250;
-	}
-	acc_pitch = (int)( acos(norm_z) *(RADIAN_VALUE));
 
 	INFO( "cal value [acc_theta] : %d , [acc_pitch] : %d\n",acc_theta ,acc_pitch);
 
@@ -1429,8 +1513,4 @@ EXTAPI int sf_check_rotation( unsigned long *curr_state)
 
 }
 
-EXTAPI int sf_read_raw_data(sensor_type_t sensor_type , float values[] , size_t *values_size)
-{
-	return -1;
-}
 //! End of a file

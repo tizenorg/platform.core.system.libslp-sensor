@@ -51,14 +51,19 @@ extern "C"
 
 enum light_data_id {
 	LIGHT_BASE_DATA_SET = (LIGHT_SENSOR<<16) | 0x0001,
+	LIGHT_LUX_DATA_SET  = (LIGHT_SENSOR<<16) | 0x0002,
 };
 
 
 enum light_evet_type {			
 	LIGHT_EVENT_CHANGE_LEVEL			= (LIGHT_SENSOR<<16) |0x0001,
 	LIGHT_EVENT_LEVEL_DATA_REPORT_ON_TIME 		= (LIGHT_SENSOR<<16) |0x0002,
+	LIGHT_EVENT_LUX_DATA_REPORT_ON_TIME			= (LIGHT_SENSOR<<16) |0x0004,
 };
 
+enum light_property_id {
+	LIGHT_PROPERTY_UNKNOWN = 0,
+};
 
 /**
  * @}

@@ -74,6 +74,11 @@ enum motion_top_to_bottom_event {
 	MOTION_ENGIEN_TOP_TO_BOTTOM_DETECTION,
 };
 
+enum motion_property_id {
+	MOTION_PROPERTY_UNKNOWN = 0,
+	MOTION_PROPERTY_CHECK_ACCEL_SENSOR,
+	MOTION_PROPERTY_CHECK_GYRO_SENSOR,
+};
 
 /**
  * @}
