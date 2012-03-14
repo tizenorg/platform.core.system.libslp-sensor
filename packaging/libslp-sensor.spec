@@ -1,11 +1,11 @@
 
-Name:       sensor
+Name:       libslp-sensor
 Summary:    Sensor framework client library
 Version:    0.5.6
 Release:    1
-Group:      TO_BE/FILLED_IN
-License:    TO BE FILLED IN
-Source0:    sensor-%{version}.tar.gz
+Group:      System/Libraries
+License:    Apache-2.0
+Source0:    libslp-sensor-%{version}.tar.gz
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 BuildRequires:  cmake
@@ -40,7 +40,6 @@ cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
 make %{?jobs:-j%jobs}
 
 %install
-rm -rf %{buildroot}
 %make_install
 
 
@@ -55,13 +54,10 @@ rm -rf %{buildroot}
 
 
 %files
-%defattr(-,root,root,-)
-%doc COPYING
 %{_libdir}/libsensor.so.*
 
 
 %files devel
-%defattr(-,root,root,-)
 %{_includedir}/sensor/*.h
 %{_libdir}/libsensor.so
 %{_libdir}/pkgconfig/sensor.pc
