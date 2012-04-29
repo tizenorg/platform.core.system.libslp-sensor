@@ -1,3 +1,11 @@
+libslp-sensor (0.5.6-42) unstable; urgency=low
+
+  * version sync
+  * Git:165.213.180.234:public/pkgs/l/libslp-sensor
+  * Tag:libslp-sensor_0.5.6-42
+
+ -- JuHyun Kim <jh8212.kim@samsung.com>  Fri, 30 Mar 2012 09:52:15 +0900
+
 libslp-sensor (0.5.6-41) unstable; urgency=low
 
   * version sync

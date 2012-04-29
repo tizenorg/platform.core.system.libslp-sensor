@@ -1,7 +1,7 @@
 Source: libslp-sensor
 Section: libs
 Priority: extra
-Maintainer: Jonghoon Han <jonghoon.han@samsung.com>, Juhyun Kim <jh8212.kim@samsung.com>, Taesoo Jun <steve.jun@samsung.com> 
+Maintainer: Juhyun Kim <jh8212.kim@samsung.com>, Taesoo Jun <steve.jun@samsung.com> 
 Build-Depends: debhelper (>= 5), autotools-dev, libsf-common-dev, libslp-setting-dev, libglib2.0-dev
 Standards-Version: 0.1.0
 Homepage: N/A

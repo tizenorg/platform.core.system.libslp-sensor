@@ -859,7 +859,8 @@ EXTAPI int sf_disconnect(int handle)
 {
 	cpacket packet(sizeof(cmd_byebye_t)+4);
 	cmd_byebye_t *payload;
-		
+
+	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_detach_channel fail , invalid handle value : %d",handle);
 
 	INFO("Detach, so remove %d from the table\n", handle);
@@ -906,6 +907,7 @@ EXTAPI int sf_start(int handle , int option)
 	cpacket packet(sizeof(cmd_start_t)+4);
 	cmd_start_t *payload;
 
+	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_start fail , invalid handle value : %d",handle);
 	retvm_if( option != 0 , -1 , "sensor_start fail , invalid option value : %d",option);
 
@@ -973,6 +975,7 @@ EXTAPI int sf_stop(int handle)
 	cpacket packet(sizeof(cmd_stop_t)+4);
 	cmd_stop_t *payload;
 
+	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_stop fail , invalid handle value : %d",handle);
 
 
@@ -1011,6 +1014,7 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 
 	int collect_data_flag = 0;
 
+	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_register_cb fail , invalid handle value : %d",handle);
 
 	payload = (cmd_reg_t*)packet.data();
@@ -1118,7 +1122,7 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 	switch (event_type ) {
 			case ACCELEROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
 				/* fall through */
-			case GEOMAGNETIC_EVENT_ATTITUDE_DATA_REPORT_ON_TIME:
+			case GEOMAGNETIC_EVENT_RAW_DATA_REPORT_ON_TIME:
 				/* fall through */
 			case PROXIMITY_EVENT_STATE_REPORT_ON_TIME:
 				/* fall through */
@@ -1130,7 +1134,7 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 				break;
 			case LIGHT_EVENT_LUX_DATA_REPORT_ON_TIME:
 				/* fall through */
-			case GEOMAGNETIC_EVENT_RAW_DATA_REPORT_ON_TIME:
+			case GEOMAGNETIC_EVENT_ATTITUDE_DATA_REPORT_ON_TIME:
 				/* fall through */
 			case ACCELEROMETER_EVENT_ORIENTATION_DATA_REPORT_ON_TIME:
 				/* fall through */
@@ -1207,6 +1211,7 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 
 	int collect_data_flag = 0;
 
+	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_unregister_cb fail , invalid handle value : %d",handle);
 
 	payload = (cmd_reg_t*)packet.data();
@@ -1322,6 +1327,7 @@ EXTAPI int sf_get_data(int handle , unsigned int data_id ,  sensor_data_t* value
 	
 	retvm_if( (!values) , -1 , "sf_get_data fail , invalid get_values pointer %p", values);
 	retvm_if( ( (data_id & 0xFFFF) < 1) || ( (data_id & 0xFFFF) > 0xFFF), -1 , "sf_get_data fail , invalid data_id %d", data_id);
+	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sf_get_data fail , invalid handle value : %d",handle);
  
 	if(g_bind_table[handle].sensor_state != SENSOR_STATE_STARTED)

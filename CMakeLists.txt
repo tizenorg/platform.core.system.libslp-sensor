@@ -14,7 +14,7 @@ add_definitions(${rpkgs_CFLAGS})
 
 #add_definitions(-Wall -O3 -omit-frame-pointer -lm) 
 #add_definitions(-Wall -g -lma -DUSE_FILE_DEBUG)
-add_definitions(-Wall -g -lma -D_DEBUG)
+#add_definitions(-Wall -g -lma -D_DEBUG)
 #add_definitions(-fvisibility=hidden -lm -DUSE_DLOG_LOG)
 #add_definitions(-fvisibility=hidden -lm)
 
