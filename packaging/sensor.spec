@@ -6,6 +6,7 @@ Release:    1
 Group:      TO_BE/FILLED_IN
 License:    TO BE FILLED IN
 Source0:    sensor-%{version}.tar.gz
+Source1001: packaging/sensor.manifest 
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 BuildRequires:  cmake
@@ -34,6 +35,7 @@ Sensor framework client library (devel)
 
 
 %build
+cp %{SOURCE1001} .
 cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
 
 
@@ -50,12 +52,14 @@ rm -rf %{buildroot}
 
 
 %files
+%manifest sensor.manifest
 %defattr(-,root,root,-)
 #%doc COPYING
 %{_libdir}/libsensor.so.*
 
 
 %files devel
+%manifest sensor.manifest
 %defattr(-,root,root,-)
 %{_includedir}/sensor/*.h
 %{_libdir}/libsensor.so
