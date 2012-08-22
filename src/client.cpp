@@ -66,6 +66,7 @@ extern int errno;
 #define MAX_BIND_SLOT				16
 #define MAX_CB_SLOT_PER_BIND		16
 #define MAX_CB_BIND_SLOT			64
+#define MAX_EVENT_LIST				16
 
 #define PITCH_MIN 		35
 #define PITCH_MAX 		145
@@ -79,6 +80,8 @@ extern int errno;
 #define PROXI_SENSOR_BASE_CHANNEL_NAME		"proxi_datastream"
 #define MOTION_ENGINE_BASE_CHANNEL_NAME	"motion_datastream"
 #define GYRO_SENSOR_BASE_CHANNEL_NAME		"gyro_datastream"
+#define BAROMETER_SENSOR_BASE_CHANNEL_NAME       "barometer_datastream"
+#define FUSION_SENSOR_BASE_CHANNEL_NAME "fusion_datastream"
 
 #define ROTATION_0 0  
 #define ROTATION_90 90  
@@ -86,24 +89,36 @@ extern int errno;
 #define ROTATION_270 270  
 #define ROTATION_360 360  
 #define ROTATION_THD 45
-			   
+
 #define RADIAN_VALUE (57.2957)
 #define XY_POSITIVE_THD 2.0
 #define XY_NEGATIVE_THD -2.0
 
 #define ON_TIME_REQUEST_COUNTER 1
 
-
+#define VCONF_SF_SERVER_POWER_OFF "memory/private/sensor/poweroff"
 
 const char *STR_SF_CLIENT_IPC_SOCKET	= "/tmp/sf_socket";
-const char *LCD_TYPE_KEY = "memory/sensor/lcd_type";
 
 static cmutex _lock;
+static int g_system_off_cb_ct = 0;
 
 enum _sensor_current_state {
 	SENSOR_STATE_UNKNOWN = -1,
 	SENSOR_STATE_STOPPED = 0,
 	SENSOR_STATE_STARTED = 1,	
+	SENSOR_STATE_PAUSED = 2
+};
+
+enum _sensor_wakeup_state {
+	SENSOR_WAKEUP_UNKNOWN = -1,
+	SENSOR_WAKEUP_UNSETTED = 0,
+	SENSOR_WAKEUP_SETTED = 1,
+};
+
+enum _sensor_poweroff_state {
+	SENSOR_POWEROFF_UNKNOWN = -1,
+	SENSOR_POWEROFF_AWAKEN  =  1,
 };
 
 struct sf_bind_table_t {
@@ -113,6 +128,8 @@ struct sf_bind_table_t {
 	int cb_slot_num[MAX_CB_SLOT_PER_BIND];
 	int my_handle;
 	int sensor_state;
+	int wakeup_state;
+	int sensor_option;
 };
 
 struct cb_bind_table_t {
@@ -135,47 +152,101 @@ struct cb_bind_table_t {
 
 static struct rotation_event rotation_mode[] =
 {
-	{
-		ROTATION_UNKNOWN,
-		{
-			ROTATION_UNKNOWN,
-			ROTATION_UNKNOWN
-		},
-	},
-	{
-		ROTATION_EVENT_90,
-		{
-			ROTATION_LANDSCAPE_LEFT,
-			ROTATION_PORTRAIT_BTM
-		},
-	},
-	{
-		ROTATION_EVENT_0,
-		{
-			ROTATION_PORTRAIT_TOP,
-			ROTATION_LANDSCAPE_LEFT
-		},
-	},
-	{
-		ROTATION_EVENT_180,
-		{
-			ROTATION_PORTRAIT_BTM,
-			ROTATION_LANDSCAPE_RIGHT
-		},
-	},
-	{
-		ROTATION_EVENT_270,
-		{
-			ROTATION_LANDSCAPE_RIGHT,
-			ROTATION_PORTRAIT_TOP
-		},
-	},
+	{ ROTATION_UNKNOWN,	  {	ROTATION_UNKNOWN,		  ROTATION_UNKNOWN		   }},
+	{ ROTATION_EVENT_90,  {	ROTATION_LANDSCAPE_LEFT,  ROTATION_PORTRAIT_BTM	   }},	
+	{ ROTATION_EVENT_0,	  {	ROTATION_PORTRAIT_TOP,	  ROTATION_LANDSCAPE_LEFT  }},	
+	{ ROTATION_EVENT_180, {	ROTATION_PORTRAIT_BTM,	  ROTATION_LANDSCAPE_RIGHT }},
+	{ ROTATION_EVENT_270, {	ROTATION_LANDSCAPE_RIGHT, ROTATION_PORTRAIT_TOP	   }},
 };
 
+struct event_counter_t {
+	const unsigned int event_type;
+	unsigned int event_counter;
+	unsigned int cb_list[MAX_BIND_SLOT];
+};
+
+static event_counter_t g_event_list[MAX_EVENT_LIST] = {
+	{ ACCELEROMETER_EVENT_ROTATION_CHECK,      0, {0, }},
+	{ ACCELEROMETER_EVENT_CALIBRATION_NEEDED,  0, {0, }},
+	{ ACCELEROMETER_EVENT_SET_HORIZON,         0, {0, }},
+	{ ACCELEROMETER_EVENT_SET_WAKEUP,          0, {0, }},
+	{ GEOMAGNETIC_EVENT_CALIBRATION_NEEDED,    0, {0, }},
+	{ PROXIMITY_EVENT_CHANGE_STATE, 		   0, {0, }},
+	{ LIGHT_EVENT_CHANGE_LEVEL, 			   0, {0, }},
+	{ MOTION_ENGINE_EVENT_SNAP, 			   0, {0, }},
+	{ MOTION_ENGINE_EVENT_SHAKE, 			   0, {0, }},
+	{ MOTION_ENGINE_EVENT_DOUBLETAP, 		   0, {0, }},
+	{ MOTION_ENGINE_EVENT_PANNING, 			   0, {0, }},
+	{ MOTION_ENGINE_EVENT_TOP_TO_BOTTOM, 	   0, {0, }},
+	{ MOTION_ENGINE_EVENT_DIRECT_CALL, 	       0, {0, }},
+	{ MOTION_ENGINE_EVENT_TILT_TO_UNLOCK,      0, {0, }},
+	{ MOTION_ENGINE_EVENT_LOCK_EXECUTE_CAMERA, 0, {0, }},
+	{ MOTION_ENGINE_EVENT_REACTIVE_ALERT	 , 0, {0, }},
+};
 
 static sf_bind_table_t g_bind_table[MAX_BIND_SLOT];
 
 static cb_bind_table_t g_cb_table[MAX_CB_BIND_SLOT];
+
+static gboolean sensor_timeout_handler(gpointer data);
+
+inline static void add_cb_number(int list_slot, unsigned int cb_number)
+{
+	if(list_slot < 0 || list_slot > MAX_EVENT_LIST)
+		return;
+
+	unsigned int i = 0;
+	const unsigned int EVENT_COUNTER = g_event_list[list_slot].event_counter;
+
+	for(i = 0 ; i < EVENT_COUNTER ; i++) {
+		if(g_event_list[list_slot].cb_list[i] == cb_number){
+			return;
+		}
+	}
+
+	if(EVENT_COUNTER < MAX_BIND_SLOT) {
+		g_event_list[list_slot].event_counter++;
+		g_event_list[list_slot].cb_list[EVENT_COUNTER] = cb_number;
+	} else {
+		return ;
+	}
+}
+
+
+inline static void del_cb_number(int list_slot, unsigned int cb_number)
+{
+	if(list_slot < 0 || list_slot > MAX_EVENT_LIST)
+		return;
+
+	unsigned int i = 0, j = 0;
+	const unsigned int EVENT_COUNTER = g_event_list[list_slot].event_counter;
+
+	for(i = 0 ; i < EVENT_COUNTER ; i++){
+		if(g_event_list[list_slot].cb_list[i] == cb_number){
+			for(j = i ; j < EVENT_COUNTER - 1; j++){
+				g_event_list[list_slot].cb_list[j] = g_event_list[list_slot].cb_list[j+1];
+			}
+			g_event_list[list_slot].cb_list[EVENT_COUNTER - 1] = 0;
+			g_event_list[list_slot].event_counter--;
+			return ;
+		}
+	}
+
+	DBG("cb number [%d] is not registered\n", cb_number);
+}
+
+
+inline static void del_cb_by_event_type(unsigned int event_type, unsigned int cb_number)
+{
+	int list_slot = 0;
+
+	for(list_slot = 0 ; list_slot < MAX_EVENT_LIST ; list_slot++)
+		if(g_event_list[list_slot].event_type == event_type)
+			break;
+
+	del_cb_number(list_slot, cb_number);
+}
+
 
 inline static int acquire_handle(void)
 {
@@ -214,9 +285,12 @@ inline static void release_handle(int i)
 	
 	g_bind_table[i].my_handle = -1;
 	g_bind_table[i].sensor_state = SENSOR_STATE_UNKNOWN;
+	g_bind_table[i].wakeup_state = SENSOR_WAKEUP_UNKNOWN;
+	g_bind_table[i].sensor_option = SENSOR_OPTION_DEFAULT;
 
 	for (j=0; j<g_bind_table[i].cb_event_max_num; j++) {
-		if (   (j<MAX_CB_SLOT_PER_BIND) && (g_bind_table[i].cb_slot_num[j] > -1)  ) {			
+		if (   (j<MAX_CB_SLOT_PER_BIND) && (g_bind_table[i].cb_slot_num[j] > -1)  ) {
+			del_cb_by_event_type(g_cb_table[g_bind_table[i].cb_slot_num[j]].cb_event_type, g_bind_table[i].cb_slot_num[j]);
 			g_cb_table[g_bind_table[i].cb_slot_num[j]].client_data= NULL;
 			g_cb_table[g_bind_table[i].cb_slot_num[j]].sensor_callback_func_t = NULL;
 			g_cb_table[g_bind_table[i].cb_slot_num[j]].cb_event_type = 0x00;
@@ -230,6 +304,7 @@ inline static void release_handle(int i)
 	_lock.unlock();
 }
 
+
 inline static void cb_release_handle(int i)
 {
 	_lock.lock();
@@ -242,8 +317,11 @@ inline static void cb_release_handle(int i)
 	g_cb_table[i].request_count = 0;
 	g_cb_table[i].request_data_id = 0;
 	
-	if ( g_cb_table[i].collected_data ) 
+	if ( g_cb_table[i].collected_data )
+	{
 		free (g_cb_table[i].collected_data);
+		g_cb_table[i].collected_data = NULL;
+	}
 	
 	g_cb_table[i].collected_data = NULL;
 	g_cb_table[i].current_collected_idx = 0;
@@ -251,16 +329,229 @@ inline static void cb_release_handle(int i)
 	g_cb_table[i].source = NULL;
 	g_cb_table[i].gsource_interval = 0;
 	g_cb_table[i].gID = 0;
-
 	_lock.unlock();
+}
+
+
+void power_off_cb(keynode_t *node, void *data)
+{
+	int val = -1;
+	int handle = -1, j = -1;
+	int state = -1;
+
+	if(vconf_keynode_get_type(node) != VCONF_TYPE_INT)
+	{
+		ERR("Errer invailed keytype");
+		return;
+	}
+
+	val = vconf_keynode_get_int(node);
+
+	switch(val)
+	{
+		case SENSOR_POWEROFF_AWAKEN:
+			for(handle = 0 ; handle < MAX_BIND_SLOT ; handle++)
+			{
+				if(g_bind_table[handle].ipc != NULL)
+				{
+					state = sf_stop(handle);
+
+					if(state < 0)
+					{
+						ERR("Cannot stop handle [%d]",handle);
+						continue;
+					}
+					else
+					{
+						DBG("LCD OFF and sensor handle [%d] stopped",handle);
+					}
+
+					for(j = 0 ; j < g_bind_table[handle].cb_event_max_num ; j++)
+					{
+						if((j<MAX_CB_SLOT_PER_BIND) && (g_bind_table[handle].cb_slot_num[j] > -1))
+						{
+							state = sf_unregister_event(handle ,g_cb_table[g_bind_table[handle].cb_slot_num[j]].cb_event_type);
+
+							if(state < 0)
+								ERR("cannot unregster_event for event [%x], handle [%d]",g_cb_table[g_bind_table[handle].cb_slot_num[j]].cb_event_type,	handle);
+						}
+					}
+
+					sf_disconnect(handle);
+				}
+			}
+			break;
+
+		default:
+			break;
+
+	}
+}
+
+
+void lcd_off_cb(keynode_t *node, void *data)
+{
+	int val = -1;
+	int i = -1, j = -1;
+
+	if(vconf_keynode_get_type(node) != VCONF_TYPE_INT)
+	{
+		ERR("Errer invailed keytype");
+		return;
+	}
+
+	val = vconf_keynode_get_int(node);
+
+	switch(val)
+	{
+		case VCONFKEY_PM_STATE_LCDOFF:   // LCD OFF
+			for(i = 0 ; i < MAX_BIND_SLOT ; i++)
+			{
+				if((g_bind_table[i].wakeup_state != SENSOR_WAKEUP_SETTED && g_bind_table[i].sensor_option != SENSOR_OPTION_ALWAYS_ON ) && g_bind_table[i].ipc != NULL)
+				{
+					if(g_bind_table[i].sensor_state == SENSOR_STATE_STARTED)
+					{
+						if(sf_stop(i) < 0)
+						{
+							ERR("Cannot stop handle [%d]",i);
+						}
+						else
+						{
+							g_bind_table[i].sensor_state = SENSOR_STATE_PAUSED;
+
+							for(j = -1; j < g_bind_table[i].cb_event_max_num; j++) 
+							{
+								if(g_cb_table[g_bind_table[i].cb_slot_num[j]].collected_data !=  NULL)
+								{
+									g_source_destroy(g_cb_table[g_bind_table[i].cb_slot_num[j]].source);
+									g_source_unref(g_cb_table[g_bind_table[i].cb_slot_num[j]].source);
+								}
+							}
+
+						}
+					}
+					DBG("LCD OFF and sensor handle [%d] stopped",i);
+				}
+			}
+
+			break;
+		case VCONFKEY_PM_STATE_NORMAL:  // LCD ON
+			for(i = 0 ; i < MAX_BIND_SLOT ; i++)
+			{
+				if(g_bind_table[i].sensor_state == SENSOR_STATE_PAUSED)
+				{
+					if(sf_start(i,g_bind_table[i].sensor_option) < 0)
+					{
+						ERR("Cannot start handle [%d]",i);
+					}
+					else
+					{
+						for(j = -1; j < g_bind_table[i].cb_event_max_num; j++) 
+						{
+							if(g_cb_table[g_bind_table[i].cb_slot_num[j]].collected_data !=  NULL)
+							{
+								g_cb_table[g_bind_table[i].cb_slot_num[j]].source =	g_timeout_source_new(g_cb_table[g_bind_table[i].cb_slot_num[j]].gsource_interval);
+								g_source_set_callback(g_cb_table[g_bind_table[i].cb_slot_num[j]].source, sensor_timeout_handler, (gpointer)&g_cb_table[g_bind_table[i].cb_slot_num[j]].my_cb_handle,NULL);
+								g_cb_table[g_bind_table[i].cb_slot_num[j]].gID = g_source_attach(g_cb_table[g_bind_table[i].cb_slot_num[j]].source,	NULL);
+							}
+						}
+					}
+					DBG("LCD ON and sensor handle [%d] started",i);
+				}
+			}
+
+			break;
+		default :
+			break ;
+	}
+}
+
+int system_off_set(void)
+{
+	int result = -1;
+	if(g_system_off_cb_ct == 0)
+	{
+		result = vconf_notify_key_changed(VCONFKEY_PM_STATE, lcd_off_cb, NULL);
+		if(result < 0)
+		{
+			ERR("cannot setting lcd_off_set_cb");
+		}
+		
+		result = vconf_notify_key_changed(VCONF_SF_SERVER_POWER_OFF, power_off_cb, NULL);
+		if(result < 0)
+		{
+			ERR("cannot setting power_off_set_cb");
+		}
+
+		g_system_off_cb_ct++;
+	}
+	else if (g_system_off_cb_ct > 0)
+	{
+		g_system_off_cb_ct++;
+	}
+	else
+	{
+		ERR("g_system_off_cb_ct is negative");
+		return -1;
+	}
+
+	DBG("system_off_set success");
+	return 1;
+}
+	
+int system_off_unset(void)
+{
+	int result = -1;
+	if(g_system_off_cb_ct == 1)
+	{
+		result = vconf_ignore_key_changed(VCONFKEY_PM_STATE, lcd_off_cb);
+		if(result < 0)
+		{
+			ERR("cannot setting lcd_off_set_cb");
+		}
+
+		result = vconf_ignore_key_changed(VCONF_SF_SERVER_POWER_OFF, power_off_cb);
+		if(result < 0)
+		{
+			ERR("cannot setting power_off_set_cb");
+		}
+
+		g_system_off_cb_ct = 0;
+	}
+	else if (g_system_off_cb_ct > 1)
+	{
+		g_system_off_cb_ct--;
+	}
+	else
+	{
+		ERR("g_system_off_cb_ct is negative");
+		return -1;
+	}
+	DBG("system_off_unset success");
+
+	return 1;
+}
+	
+
+void lcd_off_set_wake_up(keynode_t *node, void *data)
+{
+	int state = 0;
+
+	state = sf_set_property(ACCELEROMETER_SENSOR, ACCELEROMETER_PROPERTY_SET_WAKEUP, WAKEUP_SET);
+
+	if(state < 0)
+	{
+		ERR("ACCELEROMETER_PROPERTY_SET_WAKEUP  fail");
+	}
 }
 
 
 static void sensor_changed_cb(keynode_t *node, void *data)
 {
-	unsigned int event_type = (unsigned int)(data);
-	int i = 0;
+	int event_number = (int)(data);
+	unsigned int i = 0;
 	int val;
+	int cb_number = 0;
 	sensor_event_data_t cb_data;
 	sensor_panning_data_t panning_data;
 
@@ -270,20 +561,23 @@ static void sensor_changed_cb(keynode_t *node, void *data)
 		return;
 	}
 
-	if (vconf_keynode_get_type(node) !=  VCONF_TYPE_INT ) {
+	if (vconf_keynode_get_type(node) !=  VCONF_TYPE_INT )
+	{
 		ERR("Err invaild key_type , incomming key_type : %d , key_name : %s , key_value : %d", vconf_keynode_get_type(node), vconf_keynode_get_name(node),vconf_keynode_get_int(node));
 		return;
 	}
 
 	val = vconf_keynode_get_int(node);
 
-	for( i = 0 ; i < MAX_CB_BIND_SLOT ; i++)
+	for( i = 0 ; i < g_event_list[event_number].event_counter ; i++)
 	{
-		if(g_cb_table[i].cb_event_type == event_type)
+		cb_number = g_event_list[event_number].cb_list[i];
+
+		if(g_bind_table[g_cb_table[cb_number].my_sf_handle].sensor_state ==	SENSOR_STATE_STARTED)
 		{
-			if (g_cb_table[i].sensor_callback_func_t)
+			if (g_cb_table[cb_number].sensor_callback_func_t)
 			{
-				if(g_cb_table[i].cb_event_type == MOTION_ENGINE_EVENT_PANNING)
+				if(g_cb_table[cb_number].cb_event_type == MOTION_ENGINE_EVENT_PANNING)
 				{
 					if(val != 0)
 					{
@@ -291,21 +585,23 @@ static void sensor_changed_cb(keynode_t *node, void *data)
 						panning_data.y = (short)(val & 0x0000FFFF);
 						cb_data.event_data_size = sizeof(sensor_panning_data_t);
 						cb_data.event_data = (void *)&panning_data;
-						g_cb_table[i].sensor_callback_func_t(g_cb_table[i].cb_event_type, &cb_data, g_cb_table[i].client_data);
+						g_cb_table[cb_number].sensor_callback_func_t(g_cb_table[cb_number].cb_event_type,&cb_data, g_cb_table[cb_number].client_data);
 					}
-				} else {
-					if ( val<0 ) 
+				}
+				else
+				{
+					if ( val<0 )
 					{
-						ERR("vconf_keynode_get_int fail for key : %s , handle_num : %d , get_value : %d\n",	g_cb_table[i].call_back_key,i , val);
+						ERR("vconf_keynode_get_int fail for key : %s , handle_num : %d ,get_value : %d\n",g_cb_table[cb_number].call_back_key,cb_number , val);
 						return ;
 					}
 
-					switch (g_cb_table[i].cb_event_type) {
+					switch (g_cb_table[cb_number].cb_event_type) {
+						case ACCELEROMETER_EVENT_SET_WAKEUP :
+							/* fall through */
 						case ACCELEROMETER_EVENT_ROTATION_CHECK :
 							/* fall through */
 						case ACCELEROMETER_EVENT_SET_HORIZON :
-							/* fall through */
-						case ACCELEROMETER_EVENT_SET_WAKEUP :
 							/* fall through */
 						case GEOMAGNETIC_EVENT_CALIBRATION_NEEDED :
 							/* fall through */
@@ -321,20 +617,39 @@ static void sensor_changed_cb(keynode_t *node, void *data)
 							/* fall through */
 						case MOTION_ENGINE_EVENT_TOP_TO_BOTTOM:
 							/* fall through */
+						case MOTION_ENGINE_EVENT_DIRECT_CALL:
+							/* fall through */
+						case MOTION_ENGINE_EVENT_TILT_TO_UNLOCK:
+							/* fall through */
+						case MOTION_ENGINE_EVENT_LOCK_EXECUTE_CAMERA:
+							/* fall through */
+						case MOTION_ENGINE_EVENT_REACTIVE_ALERT:
+
 							cb_data.event_data_size = sizeof(val);
 							cb_data.event_data = (void *)&val;
+							g_cb_table[cb_number].sensor_callback_func_t(g_cb_table[cb_number].cb_event_type, &cb_data , g_cb_table[cb_number].client_data);
 							break;
 						default :
 							ERR("Undefined cb_event_type");
 							return ;
 							break;
 					}
-					g_cb_table[i].sensor_callback_func_t(g_cb_table[i].cb_event_type ,	&cb_data , g_cb_table[i].client_data);
+
+					if(g_cb_table[cb_number].cb_event_type == ACCELEROMETER_EVENT_SET_WAKEUP)
+					{
+						cb_release_handle(cb_number);
+						del_cb_number(event_number, cb_number);
+					}
 				}
 			}
-			else {
-				 ERR("Empty Callback func in event : %d\n", event_type);
+			else
+			{
+				ERR("Empty Callback func in event : %x\n",g_cb_table[cb_number].cb_event_type);
 			}
+		}
+		else
+		{
+			ERR("Sensor doesn't start for event : %x",g_cb_table[cb_number].cb_event_type);
 		}
 	}
 }
@@ -347,11 +662,9 @@ static gboolean sensor_timeout_handler(gpointer data)
 	sensor_event_data_t cb_data;
 
 	if ( g_bind_table[g_cb_table[*cb_handle].my_sf_handle].sensor_state != SENSOR_STATE_STARTED ) {
-		ERR("Check sensor_state, current sensor state : %d",g_bind_table[g_cb_table[*cb_handle].my_sf_handle].sensor_state);
+//		ERR("Check sensor_state, current sensor state : %d",g_bind_table[g_cb_table[*cb_handle].my_sf_handle].sensor_state);
 		return TRUE;
 	}
-
-	DBG("sensor_timeout_handler started , cb_handle value : %d\n", *cb_handle);
 
 	if (g_cb_table[*cb_handle].sensor_callback_func_t) {		
 
@@ -469,7 +782,7 @@ static int server_get_properties(int handle , unsigned int data_id, void *proper
 					return_properties->sensor_unit_idx = base_return_property->sensor_unit_idx ;
 					return_properties->sensor_min_range= base_return_property->sensor_min_range;
 					return_properties->sensor_max_range= base_return_property->sensor_max_range;
-					return_properties->sensor_resolution = base_return_property->sensor_resolution;				
+					return_properties->sensor_resolution = base_return_property->sensor_resolution;
 					memset(return_properties->sensor_name, '\0', sizeof(return_properties->sensor_name));
 					memset(return_properties->sensor_vendor, '\0', sizeof(return_properties->sensor_vendor));
 					strncpy(return_properties->sensor_name, base_return_property->sensor_name, strlen(base_return_property->sensor_name));
@@ -540,6 +853,7 @@ static int server_set_property(int handle , unsigned int property_id, long value
 		if (packet.cmd() == CMD_DONE) {
 			cmd_done_t *payload;
 			payload = (cmd_done_t*)packet.data();
+
 			if (payload->value == -1) {
 				ERR("cannot support input property\n");
 				errno = ENODEV;
@@ -724,7 +1038,7 @@ EXTAPI int sf_connect(sensor_type_t sensor_type)
 	switch (sensor_type) {
 		case ACCELEROMETER_SENSOR :
 			sf_channel_name = (char *)ACCEL_SENSOR_BASE_CHANNEL_NAME;						
-			g_bind_table[i].cb_event_max_num = 6;
+			g_bind_table[i].cb_event_max_num = 7;
 			break;
 			
 		case GEOMAGNETIC_SENSOR :
@@ -744,7 +1058,7 @@ EXTAPI int sf_connect(sensor_type_t sensor_type)
 
 		case MOTION_SENSOR:
 			sf_channel_name = (char *)MOTION_ENGINE_BASE_CHANNEL_NAME;
-			g_bind_table[i].cb_event_max_num = 7;
+			g_bind_table[i].cb_event_max_num = 9;
 			break;
 
 		case GYROSCOPE_SENSOR:
@@ -753,19 +1067,30 @@ EXTAPI int sf_connect(sensor_type_t sensor_type)
 			break;
 			
 		case THERMOMETER_SENSOR:		
-		case PRESSURE_SENSOR:		
+			break;
+		case BAROMETER_SENSOR:
+			sf_channel_name = (char *)BAROMETER_SENSOR_BASE_CHANNEL_NAME;
+			g_bind_table[i].cb_event_max_num = 3;
+			break;
+		case FUSION_SENSOR:
+			sf_channel_name = (char *)FUSION_SENSOR_BASE_CHANNEL_NAME;
+			g_bind_table[i].cb_event_max_num = 3;
+			break;
+
 		case UNKNOWN_SENSOR:
 		default :
 			ERR("Undefined sensor_type");
 			release_handle(i);
 			errno = ENODEV;
-			return -2;			
+			return -2;
 			break;
 	}
 
 	g_bind_table[i].sensor_type = sensor_type ;
 	g_bind_table[i].my_handle = i;
 	g_bind_table[i].sensor_state = SENSOR_STATE_STOPPED;
+	g_bind_table[i].wakeup_state = SENSOR_WAKEUP_UNSETTED;
+	g_bind_table[i].sensor_option = SENSOR_OPTION_DEFAULT;
 
 	for(j = 0 ; j < g_bind_table[i].cb_event_max_num  ; j++)
 		g_bind_table[i].cb_slot_num[j] = -1;
@@ -851,6 +1176,8 @@ EXTAPI int sf_connect(sensor_type_t sensor_type)
 		return -1;
 	}
 
+	system_off_set();
+
 	INFO("Connected sensor type : %x , handle : %d \n", sensor_type , i);	
 	return i;	
 }
@@ -898,6 +1225,7 @@ EXTAPI int sf_disconnect(int handle)
 
 out:
 	release_handle(handle);
+	system_off_unset();
 	return 0;
 	
 }
@@ -907,10 +1235,33 @@ EXTAPI int sf_start(int handle , int option)
 	cpacket packet(sizeof(cmd_start_t)+4);
 	cmd_start_t *payload;
 
+	int lcd_state = 0;
+
 	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_start fail , invalid handle value : %d",handle);
-	retvm_if( option != 0 , -1 , "sensor_start fail , invalid option value : %d",option);
+	retvm_if( option < 0 , -1 , "sensor_start fail , invalid option value : %d",option);
+	retvm_if( g_bind_table[handle].sensor_state == SENSOR_STATE_STARTED , 0 , "sensor already started");
 
+	if(option != SENSOR_OPTION_ALWAYS_ON)
+	{
+		if(vconf_get_int(VCONFKEY_PM_STATE, &lcd_state) == 0)
+		{
+			if(lcd_state == VCONFKEY_PM_STATE_LCDOFF)
+			{
+				g_bind_table[handle].sensor_state = SENSOR_STATE_PAUSED;
+				DBG("SENSOR_STATE_PAUSED(LCD OFF)");
+				return 0;
+			}
+		}
+		else
+		{
+			DBG("vconf_get_int Error lcd_state = [%d]",lcd_state);
+		}
+	}
+	else
+	{
+		DBG("sensor start (SENSOR_OPTION_ALWAYS_ON)");
+	}
 
 	INFO("Sensor S/F Started\n");
 
@@ -965,6 +1316,7 @@ EXTAPI int sf_start(int handle , int option)
 	}
 
 	g_bind_table[handle].sensor_state = SENSOR_STATE_STARTED;
+	g_bind_table[handle].sensor_option = option;
 
 	return 0;
 
@@ -977,7 +1329,7 @@ EXTAPI int sf_stop(int handle)
 
 	retvm_if( handle > MAX_BIND_SLOT , -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_stop fail , invalid handle value : %d",handle);
-
+	retvm_if( (g_bind_table[handle].sensor_state == SENSOR_STATE_STOPPED) || (g_bind_table[handle].sensor_state == SENSOR_STATE_PAUSED) , 0 , "sensor already stopped");
 
 	INFO("Sensor S/F Stopped\n");
 
@@ -1009,7 +1361,7 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 {
 	cpacket packet(sizeof(cmd_reg_t)+4);
 	cmd_reg_t *payload;
-	int i;
+	int i = 0, j = 0;
 	int avail_cb_slot_idx = -1;
 
 	int collect_data_flag = 0;
@@ -1128,7 +1480,11 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 				/* fall through */
 			case GYROSCOPE_EVENT_RAW_DATA_REPORT_ON_TIME:
 				/* fall through */
+			case BAROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
+				/* fall through */
 			case LIGHT_EVENT_LEVEL_DATA_REPORT_ON_TIME:
+				/* fall through */
+			case FUSION_SENSOR_EVENT_RAW_DATA_REPORT_ON_TIME:
 				collect_data_flag = 1;
 				g_cb_table[i].request_data_id = (event_type & (0xFFFF<<16)) |0x0001;
 				break;
@@ -1138,10 +1494,24 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 				/* fall through */
 			case ACCELEROMETER_EVENT_ORIENTATION_DATA_REPORT_ON_TIME:
 				/* fall through */
+			case BAROMETER_EVENT_TEMPERATURE_DATA_REPORT_ON_TIME:
+				/* fall through */
 			case PROXIMITY_EVENT_DISTANCE_DATA_REPORT_ON_TIME:
+				/* fall through */
+			case FUSION_ROTATION_VECTOR_EVENT_DATA_REPORT_ON_TIME:
 				collect_data_flag = 1;
 				g_cb_table[i].request_data_id = (event_type & (0xFFFF<<16)) |0x0002;
 				break;
+			case ACCELEROMETER_EVENT_LINEAR_ACCELERATION_DATA_REPORT_ON_TIME:
+				/* fall through */
+			case FUSION_ROTATION_MATRIX_EVENT_DATA_REPORT_ON_TIME:
+				/* fall through */
+			case BAROMETER_EVENT_ALTITUDE_DATA_REPORT_ON_TIME:
+				collect_data_flag = 1;
+				g_cb_table[i].request_data_id = (event_type & (0xFFFF<<16)) |0x0004;
+				break;
+			default :
+				collect_data_flag = 0;
 	}
 
 	INFO("key : %s(p:%p), cb_handle value : %d\n", g_cb_table[i].call_back_key ,g_cb_table[i].call_back_key, i );
@@ -1188,15 +1558,29 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 		g_cb_table[i].request_count = 0;
 		g_cb_table[i].request_data_id = 0;
 		g_cb_table[i].collected_data = NULL;
-			
-		if (vconf_notify_key_changed( g_cb_table[i].call_back_key,sensor_changed_cb,(void*)(g_cb_table[i].cb_event_type)) < 0 ) {
-			DBG("vconf_add_changed_cb is already registered for key : %s  , my_cb_handle value : %d\n", g_cb_table[i].call_back_key, g_cb_table[i].my_cb_handle);
-		} else {
-			DBG("vconf_add_chaged_cb success for key : %s  , my_cb_handle value : %d\n", g_cb_table[i].call_back_key, g_cb_table[i].my_cb_handle);
+
+		for(j = 0 ; j < MAX_EVENT_LIST ; j++){
+			if(g_event_list[j].event_type == event_type) {
+				if(g_event_list[j].event_counter < 1){
+					if(vconf_notify_key_changed(g_cb_table[i].call_back_key,sensor_changed_cb,(void*)(j)) == 0 ) {
+						DBG("vconf_add_chaged_cb success for key : %s  , my_cb_handle value : %d\n", g_cb_table[i].call_back_key, g_cb_table[i].my_cb_handle);
+					} else {
+						DBG("vconf_add_chaged_cb fail for key : %s  , my_cb_handle value : %d\n", g_cb_table[i].call_back_key, g_cb_table[i].my_cb_handle);
+						cb_release_handle(i);
+						errno = ENODEV;
+						return -2;
+					}
+				}else {
+					DBG("vconf_add_changed_cb is already registered for key : %s, my_cb_handle	value : %d\n", g_cb_table[i].call_back_key,	g_cb_table[i].my_cb_handle);
+				}
+				add_cb_number(j, i);
+			}
 		}
 	}
+
+
 	g_bind_table[handle].cb_slot_num[avail_cb_slot_idx] = i;
-	
+
 	return 0;
 }
 
@@ -1207,7 +1591,7 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 	cpacket packet(sizeof(cmd_reg_t)+4);
 	cmd_reg_t *payload;
 	int find_cb_handle =-1;
-	int i;
+	int i = 0, j = 0;
 
 	int collect_data_flag = 0;
 
@@ -1250,12 +1634,20 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 		case ACCELEROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
 			/* fall through */
 		case ACCELEROMETER_EVENT_ORIENTATION_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case ACCELEROMETER_EVENT_LINEAR_ACCELERATION_DATA_REPORT_ON_TIME :
 			/* fall through */ 
 		case GEOMAGNETIC_EVENT_ATTITUDE_DATA_REPORT_ON_TIME:
 			/* fall through */ 			
 		case PROXIMITY_EVENT_STATE_REPORT_ON_TIME:
 			/* fall through */
 		case GYROSCOPE_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case BAROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case BAROMETER_EVENT_TEMPERATURE_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case BAROMETER_EVENT_ALTITUDE_DATA_REPORT_ON_TIME:
 			/* fall through */
 		case LIGHT_EVENT_LEVEL_DATA_REPORT_ON_TIME:
 			/* fall through */
@@ -1264,6 +1656,12 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 		case LIGHT_EVENT_LUX_DATA_REPORT_ON_TIME:
 			/* fall through */
 		case PROXIMITY_EVENT_DISTANCE_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case FUSION_SENSOR_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case FUSION_ROTATION_VECTOR_EVENT_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case FUSION_ROTATION_MATRIX_EVENT_DATA_REPORT_ON_TIME:
 			collect_data_flag = 1;				
 			break;
 	}
@@ -1290,7 +1688,6 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 			errno = ECOMM;
 			return -2;
 		}
-
 	}	
 
 	if ( collect_data_flag ) {
@@ -1299,13 +1696,24 @@ EXTAPI int sf_unregister_event(int handle, unsigned int event_type)
 		g_cb_table[find_cb_handle].request_count = 0;
 		g_cb_table[find_cb_handle].request_data_id = 0;
 		g_cb_table[find_cb_handle].gsource_interval = 0;
-		
 	} else {
-		state = vconf_ignore_key_changed(g_cb_table[find_cb_handle].call_back_key, sensor_changed_cb);
-		if ( state < 0 ) {		
-			ERR("Failed to del callback using by vconf_del_changed_cb for key : %s\n",g_cb_table[find_cb_handle].call_back_key);
-			errno = ENODEV;
-			state = -2;
+		for(j = 0 ; j < MAX_EVENT_LIST ; j++){
+			if(g_event_list[j].event_type == event_type){
+				if(g_event_list[j].event_counter <= 1){
+					state = vconf_ignore_key_changed(g_cb_table[find_cb_handle].call_back_key, sensor_changed_cb);
+					if ( state < 0 ) {
+						ERR("Failed to del callback using by vconf_del_changed_cb for key : %s\n",g_cb_table[find_cb_handle].call_back_key);
+						errno = ENODEV;
+						state = -2;
+					}
+					else {
+						DBG("del callback using by vconf success");
+					}
+				} else {
+					DBG("fake remove");
+				}
+				del_cb_number(j,find_cb_handle);
+			}
 		}
 	}
 
@@ -1415,7 +1823,7 @@ EXTAPI int sf_check_rotation( unsigned long *curr_state)
 
 	double raw_z;
 	double atan_value = 0, norm_z = 0;
-	int acc_theta = 0 , acc_pitch = 0;	
+	int acc_theta = 0 , acc_pitch = 0;
 	int handle = 0;
 	int lcd_type = 0;
 
@@ -1462,18 +1870,16 @@ EXTAPI int sf_check_rotation( unsigned long *curr_state)
 		return 0;
 	}
 
-	if(vconf_get_int(LCD_TYPE_KEY, &lcd_type) != 0)
-		lcd_type = 0;
-
 	if((base_data_values->values[0] > XY_POSITIVE_THD || base_data_values->values[0] < XY_NEGATIVE_THD) || (base_data_values->values[1] > XY_POSITIVE_THD || base_data_values->values[1] < XY_NEGATIVE_THD))
 	{
-		atan_value = atan2(base_data_values->values[1],base_data_values->values[0]);
+		atan_value = atan2(-(base_data_values->values[1]),(base_data_values->values[0]));
 		acc_theta = ((int)(atan_value * (RADIAN_VALUE) + 270.0))%360;
+
 		raw_z = (double)(base_data_values->values[2]) / 9.8;
 
 		if ( raw_z > 1.0 ) {
 			norm_z = 1.0;
-		} 
+		}
 		else if ( raw_z < -1.0 ) {
 			norm_z = -1.0;
 		}
@@ -1513,10 +1919,245 @@ EXTAPI int sf_check_rotation( unsigned long *curr_state)
 	
 	state = 0;	
 	if(base_data_values)
+	{
 		free(base_data_values);
+		base_data_values = NULL;
+	}
 
 	return state;
 
 }
 
+
+EXTAPI int sf_set_wakeup(sensor_type_t sensor_type)
+{
+	int i = 0;
+
+	if(sf_is_wakeup_supported(sensor_type) < 0)
+	{
+		ERR("Cannot support wake up");
+		return -1;
+	}
+
+	for(i = 0 ; i < MAX_BIND_SLOT ; i++)
+	{
+		if(g_bind_table[i].sensor_type == sensor_type)
+		{
+			g_bind_table[i].wakeup_state = SENSOR_WAKEUP_SETTED;
+		}
+	}
+
+	vconf_notify_key_changed(VCONFKEY_PM_STATE, lcd_off_set_wake_up, NULL);
+
+	return 0;
+}
+
+EXTAPI int sf_unset_wakeup(sensor_type_t sensor_type)
+{
+	int i = 0;
+
+	if(sf_is_wakeup_supported(sensor_type) < 0)
+	{
+		ERR("Cannot support wake up");
+		return -1;
+	}
+	
+	if(sensor_type == ACCELEROMETER_SENSOR)
+		return sf_set_property(sensor_type, ACCELEROMETER_PROPERTY_SET_WAKEUP, WAKEUP_UNSET);
+	else
+	{
+		ERR("Cannot support wakeup");
+		return -1;
+	}
+	
+	for(i = 0 ; i < MAX_BIND_SLOT ; i++)
+	{
+		if(g_bind_table[i].sensor_type == sensor_type)
+		{
+			g_bind_table[i].wakeup_state = SENSOR_WAKEUP_UNSETTED;
+		}
+	}
+
+	vconf_ignore_key_changed(VCONFKEY_PM_STATE, lcd_off_set_wake_up);
+
+	return 0;
+}
+
+EXTAPI int sf_is_wakeup_supported(sensor_type_t sensor_type)
+{
+	if(sensor_type == ACCELEROMETER_SENSOR)
+		return sf_set_property(sensor_type, ACCELEROMETER_PROPERTY_CHECK_WAKEUP_SUPPORTED,	WAKEUP_SET);
+	else
+	{
+		ERR("Cannot support wakeup");
+		return -1;
+	}
+}
+
+EXTAPI int sf_is_wakeup_enabled(sensor_type_t sensor_type)
+{
+	if(sensor_type == ACCELEROMETER_SENSOR)
+		return sf_set_property(sensor_type,ACCELEROMETER_PROPERTY_CHECK_WAKEUP_STATUS,0);
+	else
+	{
+		 ERR("Cannot support wakeup");
+		 return -1;
+	}
+}
+
+EXTAPI int sf_change_event_condition(int handle, unsigned int event_type, event_condition_t *event_condition)
+{
+	cpacket packet(sizeof(cmd_reg_t) + 4);
+	cmd_reg_t *payload;
+	int sensor_state = SENSOR_STATE_UNKNOWN;
+
+	int i = 0;
+
+	switch (event_type ) {
+		case ACCELEROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case ACCELEROMETER_EVENT_ORIENTATION_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case ACCELEROMETER_EVENT_LINEAR_ACCELERATION_DATA_REPORT_ON_TIME :
+			/* fall through */
+		case GEOMAGNETIC_EVENT_ATTITUDE_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case PROXIMITY_EVENT_STATE_REPORT_ON_TIME:
+			/* fall through */
+		case GYROSCOPE_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case BAROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case BAROMETER_EVENT_TEMPERATURE_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case BAROMETER_EVENT_ALTITUDE_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case LIGHT_EVENT_LEVEL_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case GEOMAGNETIC_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case LIGHT_EVENT_LUX_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case PROXIMITY_EVENT_DISTANCE_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case FUSION_SENSOR_EVENT_RAW_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case FUSION_ROTATION_VECTOR_EVENT_DATA_REPORT_ON_TIME:
+			/* fall through */
+		case FUSION_ROTATION_MATRIX_EVENT_DATA_REPORT_ON_TIME:
+			break;
+		default :
+			ERR("Cannot support this API");
+			return -1;
+	}
+
+	for(i = 0 ; i < MAX_CB_SLOT_PER_BIND ; i++)
+	{
+		if(g_cb_table[g_bind_table[handle].cb_slot_num[i]].cb_event_type == event_type)
+		{
+			if(!event_condition)
+			{
+				if(g_cb_table[g_bind_table[handle].cb_slot_num[i]].gsource_interval == (guint)BASE_GATHERING_INTERVAL)
+				{
+					ERR("same interval");
+					return -1;
+				}
+			}
+			else
+			{
+				if(g_cb_table[g_bind_table[handle].cb_slot_num[i]].gsource_interval == (guint)event_condition->cond_value1)
+				{
+					ERR("same interval");
+					return -1;
+				}
+			}
+
+			DBG("find callback number [%d]",i);
+			break;
+		}
+	}
+
+	if(i == MAX_CB_SLOT_PER_BIND)
+	{
+		ERR("cannot find event_type [%x] in handle [%d]", event_type, handle);
+		return -1;
+	}
+
+	sensor_state = g_bind_table[handle].sensor_state;
+	g_bind_table[handle].sensor_state = SENSOR_STATE_STOPPED;
+
+	payload = (cmd_reg_t*)packet.data();
+	if(payload) {
+		ERR("cannot find memory for send packet.data");
+		errno = ENOMEM;
+		g_bind_table[handle].sensor_state = SENSOR_STATE_STARTED;
+		return -2;
+	}
+
+	packet.set_version(PROTOCOL_VERSION);
+	packet.set_cmd(CMD_REG);
+	packet.set_payload_size(sizeof(cmd_reg_t));
+	payload->type = REG_ADD;
+	payload->event_type = event_type;
+
+	if(!event_condition)
+		payload->interval = BASE_GATHERING_INTERVAL;
+	else if((event_condition->cond_op == CONDITION_EQUAL) && (event_condition->cond_value1 > 0 ))
+		payload->interval = event_condition->cond_value1;
+	else
+		payload->interval = BASE_GATHERING_INTERVAL;
+
+
+	INFO("Send CMD_REG command with reg_type : %x , event_type : %x\n",payload->type , payload->event_type );
+	if (g_bind_table[handle].ipc && g_bind_table[handle].ipc->send(packet.packet(), packet.size()) == false) {
+		ERR("Faield to send a packet\n");
+		errno = ECOMM;
+		g_bind_table[handle].sensor_state = sensor_state;
+		return -2;
+	}
+
+	if (g_bind_table[handle].ipc && g_bind_table[handle].ipc->recv(packet.packet(), packet.header_size()) == false) {
+		ERR("Faield to receive a packet\n");
+		errno = ECOMM;
+		g_bind_table[handle].sensor_state = sensor_state;
+		return -2;
+	}
+
+	if (packet.payload_size()) {
+		if (g_bind_table[handle].ipc && g_bind_table[handle].ipc->recv((char*)packet.packet() + packet.header_size(), packet.payload_size()) == false) {
+			ERR("Faield to receive a packet\n");
+			errno = ECOMM;
+			g_bind_table[handle].sensor_state = sensor_state;
+			return -2;
+		}
+
+		if (packet.cmd() == CMD_DONE) {
+			cmd_done_t *payload;
+			payload = (cmd_done_t*)packet.data();
+			if (payload->value == -1) {
+				ERR("server register fail\n");
+				errno = ECOMM;
+				g_bind_table[handle].sensor_state = sensor_state;
+				return -2;
+			}
+		} else {
+			ERR("unexpected server cmd\n");
+			errno = ECOMM;
+			g_bind_table[handle].sensor_state = sensor_state;
+			return -2;
+		}
+	}
+
+	g_source_destroy(g_cb_table[i].source);
+	g_source_unref(g_cb_table[i].source);
+
+	g_cb_table[i].gsource_interval = (guint)payload->interval;
+	g_cb_table[i].source = g_timeout_source_new(g_cb_table[i].gsource_interval);
+	g_source_set_callback (g_cb_table[i].source, sensor_timeout_handler, (gpointer)&g_cb_table[i].my_cb_handle,NULL);
+	g_cb_table[i].gID = g_source_attach (g_cb_table[i].source, NULL);
+
+	g_bind_table[handle].sensor_state = sensor_state;
+
+	return 0;
+}
 //! End of a file

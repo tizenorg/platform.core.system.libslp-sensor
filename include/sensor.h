@@ -67,8 +67,9 @@ typedef enum {
 	PROXIMITY_SENSOR			= 0x0008,
 	THERMOMETER_SENSOR			= 0x0010,
 	GYROSCOPE_SENSOR			= 0x0020,	
-	PRESSURE_SENSOR				= 0x0040,
+	BAROMETER_SENSOR			= 0x0040,
 	MOTION_SENSOR 				= 0x0080,
+	FUSION_SENSOR 				= 0x0100,
 } sensor_type_t;
 
 /*header for each sensor type*/
@@ -78,8 +79,10 @@ typedef enum {
 #include <sensor_proxi.h>
 #include <sensor_motion.h>
 #include <sensor_gyro.h>
+#include <sensor_barometer.h>
+#include <sensor_fusion.h>
 
-#define MAX_KEY_LEN 30
+#define MAX_KEY_LEN 64
 #define MAX_VALUE_SIZE 12
 
 typedef enum {
@@ -96,8 +99,8 @@ typedef struct {
 
 
 typedef struct {
-		size_t event_data_size;
-		void *event_data;
+	size_t event_data_size;
+	void *event_data;
 } sensor_event_data_t;
 
 typedef void (*sensor_callback_func_t)(unsigned int, sensor_event_data_t *, void *);  /**/
@@ -112,7 +115,6 @@ enum sensor_data_unit_idx {
 	SENSOR_UNIT_LEVEL_1_TO_10,
 	SENSOR_UNIT_STATE_ON_OFF,
 	SENSOR_UNIT_DEGREE_PER_SECOND,
-	
 	SENSOR_UNIT_IDX_END
 };
 
@@ -122,6 +124,11 @@ enum sensor_data_accuracy {
 	SENSOR_ACCURACY_NORMAL =1,
 	SENSOR_ACCURACY_GOOD = 2,
 	SENSOR_ACCURACY_VERYGOOD = 3
+};
+
+enum sensor_start_option {
+	SENSOR_OPTION_DEFAULT = 0,
+	SENSOR_OPTION_ALWAYS_ON = 1,
 };
 
 typedef struct {
@@ -214,7 +221,7 @@ int sf_disconnect(int handle);
  * @fn int sf_start(int handle , int option)
  * @brief This API sends a start command to sensor server. This intimates server that the client side is ready to handle data and start processing. The parameter option should be '0' for current usages.
  * @param[in] handle received handle value by sf_connect()
- * @param[in] option just set a "0" value (not support current , reserved for future
+ * @param[in] option With SENSOR_OPTION_DEFAULT, it stops to sense when LCD is off, and with SENSOR_OPTION_ALWAYS_ON, it continues to sense even when LCD is off
  * @return if it succeed, it return zero value , otherwise negative value return
  */
 int sf_start(int handle , int option);
@@ -270,6 +277,50 @@ int sf_get_data(int handle , unsigned int data_id , sensor_data_t* values);
  */
 int sf_check_rotation( unsigned long *curr_state);
 
+
+/**
+ * @fn int sf_set_wakeup(sensor_type_t sensor_type)
+ * @brief  This API used to set wakeup AP.
+ * @return if it succeed, it return zero value , otherwise negative value return
+ */
+int sf_set_wakeup(sensor_type_t sensor_type);
+
+
+/**
+ * @fn int sf_unset_wakeup(sensor_type_t sensor_type)
+ * @brief  This API used to unset wakeup function.
+ * @return if it succeed, it return zero value , otherwise negative value return
+ */
+int sf_unset_wakeup(sensor_type_t sensor_type);
+
+
+/**
+ * @fn int sf_is_wakeup_supported(void)
+ * @brief  This API will return 0 when it is available and negative value when it does not available
+ * @return if it succeed, it return zero value , otherwise negative value return
+ */
+int sf_is_wakeup_supported(sensor_type_t sensor_type);
+
+
+
+/**
+ * @fn int sf_is_wakeup_enabled(void)
+ * @brief  This API check that wakeup is setted or unsetted
+ * @return if it succeed, it return zero value , otherwise negative value return
+ */
+int sf_is_wakeup_enabled(sensor_type_t sensor_type);
+
+
+
+/**
+ * @fn int sf_change_event_condition(int handle, unsigned int event_type, event_condition_t *event_condition)
+ * @brief This API change a user defined callback function condition with a sensor registered with the specified handle.
+ * @param[in] handle received handle value by sf_connect()
+ * @param[in] event_type your desired event_type that you want to unregister event
+ * @param[in] event_condition your desired event condition that you want to change event
+ * @return if it succeed, it return zero value , otherwise negative value return
+ */
+int sf_change_event_condition(int handle, unsigned int event_type, event_condition_t *event_condition);
 /**
   * @}
  */

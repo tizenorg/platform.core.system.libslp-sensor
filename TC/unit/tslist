@@ -8,4 +8,3 @@
 /unit/utc_SensorFW_sf_unregister_event_func
 /unit/utc_SensorFW_sf_get_data_func
 /unit/utc_SensorFW_sf_check_rotation_func
-/unit/utc_SensorFW_sf_read_raw_data_func

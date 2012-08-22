@@ -1,20 +1,18 @@
 
 Name:       sensor
 Summary:    Sensor framework client library
-Version:    0.5.6
+Version:    0.5.10
 Release:    1
 Group:      TO_BE/FILLED_IN
 License:    TO BE FILLED IN
 Source0:    sensor-%{version}.tar.gz
-Source1001: packaging/sensor.manifest 
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 BuildRequires:  cmake
-BuildRequires:  pkgconfig(vconf)
+BuildRequires:  vconf-keys-devel
 BuildRequires:  pkgconfig(sf_common)
 BuildRequires:  pkgconfig(vconf)
 BuildRequires:  pkgconfig(glib-2.0)
-
 
 %description
 Sensor framework client library
@@ -35,7 +33,6 @@ Sensor framework client library (devel)
 
 
 %build
-cp %{SOURCE1001} .
 cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
 
 
@@ -46,20 +43,22 @@ rm -rf %{buildroot}
 %make_install
 
 
+
+
 %post -p /sbin/ldconfig
 
 %postun -p /sbin/ldconfig
 
 
+
+
+
 %files
-%manifest sensor.manifest
 %defattr(-,root,root,-)
-#%doc COPYING
 %{_libdir}/libsensor.so.*
 
 
 %files devel
-%manifest sensor.manifest
 %defattr(-,root,root,-)
 %{_includedir}/sensor/*.h
 %{_libdir}/libsensor.so

@@ -9,8 +9,7 @@ TARGETS = 	utc_SensorFW_sf_get_properties_func \
 		utc_SensorFW_sf_register_event_func \
 		utc_SensorFW_sf_unregister_event_func \
 		utc_SensorFW_sf_get_data_func \
-		utc_SensorFW_sf_check_rotation_func \
-		utc_SensorFW_sf_read_raw_data_func
+		utc_SensorFW_sf_check_rotation_func
 
 PKGS = sf_common sensor
 
