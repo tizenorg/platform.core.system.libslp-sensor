@@ -1,0 +1,13 @@
+# Package Information for pkg-config
+
+prefix=@PREFIX@
+exec_prefix=@EXEC_PREFIX@
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@/sensor
+
+Name: libsensor
+Description: Sensor framework client library
+Version: @VERSION@
+Requires: 
+Libs: -L${libdir} -lsensor
+Cflags: -I${includedir}

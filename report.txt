@@ -1,0 +1,35 @@
+==============================================================
+Package: src
+==============================================================
+1: You don't have either of COPYING and LICENSE. After adding one of them, re-do the sanity checking.
+==============================================================
+
+
+==============================================================
+Package: include
+==============================================================
+1: You don't have either of COPYING and LICENSE. After adding one of them, re-do the sanity checking.
+==============================================================
+
+
+==============================================================
+Package: image
+==============================================================
+1: You don't have either of COPYING and LICENSE. After adding one of them, re-do the sanity checking.
+==============================================================
+
+
+==============================================================
+Package: .git
+==============================================================
+1: You don't have either of COPYING and LICENSE. After adding one of them, re-do the sanity checking.
+==============================================================
+
+
+==============================================================
+Package: debian
+==============================================================
+1: You don't have either of COPYING and LICENSE. After adding one of them, re-do the sanity checking.
+==============================================================
+
+
