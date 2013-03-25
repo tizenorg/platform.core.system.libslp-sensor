@@ -3,7 +3,6 @@ project(sensor CXX)
 
 SET(PREFIX ${CMAKE_INSTALL_PREFIX})
 SET(EXEC_PREFIX "\${prefix}")
-SET(LIBDIR "\${prefix}/lib")
 SET(INCLUDEDIR "\${prefix}/include")
 SET(VERSION_MAJOR 1)
 SET(VERSION "${VERSION_MAJOR}.1.0")
@@ -45,7 +44,7 @@ SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES VERSION ${VERSION})
 configure_file(${PROJECT_NAME}.pc.in ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.pc @ONLY)
 
 #install(DIRECTORY include/ DESTINATION include/ FILES_MATCHING PATTERN "*.h")
-install(TARGETS ${PROJECT_NAME} DESTINATION lib COMPONENT RuntimeLibraries)
+install(TARGETS ${PROJECT_NAME} DESTINATION ${LIB_INSTALL_DIR} COMPONENT RuntimeLibraries)
 
 install(FILES include/sensor.h DESTINATION include/sensor/)
 install(FILES include/sensor_accel.h DESTINATION include/sensor/)
@@ -57,4 +56,4 @@ install(FILES include/sensor_gyro.h DESTINATION include/sensor/)
 install(FILES include/sensor_barometer.h DESTINATION include/sensor/)
 install(FILES include/sensor_fusion.h DESTINATION include/sensor/)
 
-install(FILES ${PROJECT_NAME}.pc DESTINATION lib/pkgconfig)
+install(FILES ${PROJECT_NAME}.pc DESTINATION ${LIB_INSTALL_DIR}/pkgconfig)

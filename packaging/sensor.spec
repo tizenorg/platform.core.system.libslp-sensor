@@ -33,7 +33,7 @@ Sensor framework client library (devel)
 
 
 %build
-cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
+%cmake .
 
 
 make %{?jobs:-j%jobs}

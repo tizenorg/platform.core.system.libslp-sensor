@@ -556,7 +556,7 @@ void lcd_off_set_wake_up(keynode_t *node, void *data)
 
 static void sensor_changed_cb(keynode_t *node, void *data)
 {
-	int event_number = (int)(data);
+	signed long event_number = (signed long)(data);
 	unsigned int i = 0;
 	int val;
 	int cb_number = 0;
