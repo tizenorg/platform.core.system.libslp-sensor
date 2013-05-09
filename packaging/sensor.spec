@@ -1,7 +1,7 @@
 
 Name:       sensor
 Summary:    Sensor framework client library
-Version:    0.5.26
+Version:    0.5.27
 Release:    1
 Group:      TO_BE/FILLED_IN
 License:    Apache 2.0

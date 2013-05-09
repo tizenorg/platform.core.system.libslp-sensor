@@ -2000,7 +2000,7 @@ EXTAPI int sf_check_rotation( unsigned long *curr_state)
 		return -1;
 	}
 
-	state = sf_start(handle, 0);
+	state = sf_start(handle, 1);
 	if(state < 0)
 	{
 		ERR("sf_start fail\n");
