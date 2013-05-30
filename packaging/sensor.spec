@@ -1,13 +1,10 @@
-
 Name:       sensor
 Summary:    Sensor framework client library
 Version:    0.5.27
 Release:    1
-Group:      TO_BE/FILLED_IN
-License:    Apache 2.0
+Group:      System/Sensor Framework
+License:    Apache-2.0
 Source0:    sensor-%{version}.tar.gz
-Requires(post): /sbin/ldconfig
-Requires(postun): /sbin/ldconfig
 BuildRequires:  cmake
 BuildRequires:  vconf-keys-devel
 BuildRequires:  pkgconfig(sf_common)
@@ -17,11 +14,9 @@ BuildRequires:  pkgconfig(glib-2.0)
 %description
 Sensor framework client library
 
-
-
 %package devel
 Summary:    Sensor framework library (devel)
-Group:      System/Sensor Framework
+Group:      System/Development
 Requires:   %{name} = %{version}-%{release}
 
 %description devel
@@ -31,7 +26,6 @@ Sensor framework client library (devel)
 %prep
 %setup -q -n %{name}-%{version}
 
-
 %build
 %cmake .
 
@@ -39,26 +33,18 @@ Sensor framework client library (devel)
 make %{?jobs:-j%jobs}
 
 %install
-rm -rf %{buildroot}
 %make_install
-
-mkdir -p %{buildroot}/usr/share/license
-cp LICENSE %{buildroot}/usr/share/license/%{name}
-
 
 %post -p /sbin/ldconfig
 
 %postun -p /sbin/ldconfig
 
 
-
-
-
 %files
+%license LICENSE
 %manifest libslp-sensor.manifest
 %defattr(-,root,root,-)
 %{_libdir}/libsensor.so.*
-/usr/share/license/%{name}
 
 %files devel
 %defattr(-,root,root,-)
