@@ -5,6 +5,7 @@ Release:    1
 Group:      System/Sensor Framework
 License:    Apache-2.0
 Source0:    sensor-%{version}.tar.gz
+Source1001: 	sensor.manifest
 BuildRequires:  cmake
 BuildRequires:  vconf-keys-devel
 BuildRequires:  pkgconfig(sf_common)
@@ -25,6 +26,7 @@ Sensor framework client library (devel)
 
 %prep
 %setup -q -n %{name}-%{version}
+cp %{SOURCE1001} .
 
 %build
 %cmake .
@@ -41,12 +43,14 @@ make %{?jobs:-j%jobs}
 
 
 %files
+%manifest %{name}.manifest
 %license LICENSE
 %manifest libslp-sensor.manifest
 %defattr(-,root,root,-)
 %{_libdir}/libsensor.so.*
 
 %files devel
+%manifest %{name}.manifest
 %defattr(-,root,root,-)
 %{_includedir}/sensor/*.h
 %{_libdir}/libsensor.so
