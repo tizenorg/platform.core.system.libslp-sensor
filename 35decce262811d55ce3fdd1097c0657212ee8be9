@@ -1,0 +1,8 @@
+Change-Id: I35decce262811d55ce3fdd1097c0657212ee8be9
+Code-Review+2: Ryan Ware <ware@linux.intel.com>
+Verified+1: Ryan Ware <ware@linux.intel.com>
+Submitted-by: Ryan Ware <ware@linux.intel.com>
+Submitted-at: Mon, 08 Jul 2013 10:08:16 -0700
+Reviewed-on: https://review.tizen.org/gerrit/4416
+Project: platform/core/system/libslp-sensor
+Branch: refs/heads/tizen
