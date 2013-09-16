@@ -1315,7 +1315,12 @@ EXTAPI int sf_start(int handle , int option)
 	retvm_if( handle > MAX_BIND_SLOT - 1, -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_start fail , invalid handle value : %d",handle);
 	retvm_if( option < 0 , -1 , "sensor_start fail , invalid option value : %d",option);
-	retvm_if( g_bind_table[handle].sensor_state == SENSOR_STATE_STARTED , 0 , "sensor already started");
+
+	if (option == SENSOR_OPTION_ALWAYS_ON)
+		g_bind_table[handle].sensor_option = option;
+
+	retv_if( g_bind_table[handle].sensor_state == SENSOR_STATE_STARTED , 0);
+
 
         try {
                 packet = new cpacket(sizeof(cmd_start_t)+4);
@@ -1405,7 +1410,6 @@ EXTAPI int sf_start(int handle , int option)
 	}
 
 	g_bind_table[handle].sensor_state = SENSOR_STATE_STARTED;
-	g_bind_table[handle].sensor_option = option;
 
 	delete packet;
 	return 0;
@@ -1419,7 +1423,7 @@ EXTAPI int sf_stop(int handle)
 
 	retvm_if( handle > MAX_BIND_SLOT - 1, -1 , "Incorrect handle");
 	retvm_if( (g_bind_table[handle].ipc == NULL) ||(handle < 0) , -1 , "sensor_stop fail , invalid handle value : %d",handle);
-	retvm_if( (g_bind_table[handle].sensor_state == SENSOR_STATE_STOPPED) || (g_bind_table[handle].sensor_state == SENSOR_STATE_PAUSED) , 0 , "sensor already stopped");
+	retv_if( (g_bind_table[handle].sensor_state == SENSOR_STATE_STOPPED) || (g_bind_table[handle].sensor_state == SENSOR_STATE_PAUSED) , 0);
 
         try {
                 packet = new cpacket(sizeof(cmd_stop_t)+4);
