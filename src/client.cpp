@@ -1586,9 +1586,11 @@ EXTAPI int sf_register_event(int handle , unsigned int event_type ,  event_condi
 	memset(g_cb_table[i].call_back_key,'\0',MAX_KEY_LEN);
 	snprintf(g_cb_table[i].call_back_key,(MAX_KEY_LEN-1),"%s%x",DEFAULT_SENSOR_KEY_PREFIX, event_type);
 
+	_lock.lock();
 	g_cb_table[i].cb_event_type = event_type;
 	g_cb_table[i].client_data = cb_data;
 	g_cb_table[i].sensor_callback_func_t = cb;
+	_lock.unlock();
 
 	switch (event_type ) {
 			case ACCELEROMETER_EVENT_RAW_DATA_REPORT_ON_TIME:
