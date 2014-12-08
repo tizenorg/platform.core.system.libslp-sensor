@@ -8,7 +8,6 @@ Source0:    sensor-%{version}.tar.gz
 Source1001:	%{name}.manifest
 Source1002:	%{name}-devel.manifest
 BuildRequires:  cmake
-BuildRequires:  vconf-keys-devel
 BuildRequires:  pkgconfig(sf_common)
 BuildRequires:  pkgconfig(vconf)
 BuildRequires:  pkgconfig(glib-2.0)
